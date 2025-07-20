@@ -2,6 +2,7 @@ from textual import on
 from textual.app import ComposeResult
 from textual import containers
 from textual import getters
+from textual import events
 from textual.binding import Binding
 from textual.widget import Widget
 from textual.widgets import Static
@@ -18,7 +19,7 @@ from toad.widgets.throbber import Throbber
 from toad.widgets.welcome import Welcome
 from toad.widgets.user_input import UserInput
 from toad.widgets.agent_response import AgentResponse
-
+from toad.menus import CONVERSATION_MENUS
 
 MD = """\
 # Textual Markdown Browser - Demo
@@ -225,12 +226,17 @@ class Cursor(Static):
 class Contents(containers.VerticalScroll):
     BINDING_GROUP_TITLE = "View"
 
+    @on(events.Focus)
+    def on_focus(self) -> None:
+        self.visible = True
+
 
 class Conversation(containers.Vertical):
     BINDING_GROUP_TITLE = "Conversation"
     BINDINGS = [
         Binding("shift+up", "cursor_up", "Block cursor up", priority=True),
         Binding("shift+down", "cursor_down", "Block cursor down", priority=True),
+        Binding("enter", "select_block", "Select block"),
         Binding("escape", "dismiss", "Dismiss"),
     ]
 
@@ -245,19 +251,6 @@ class Conversation(containers.Vertical):
 
     def compose(self) -> ComposeResult:
         yield Throbber(id="throbber")
-        yield Menu(
-            [
-                Menu.Item("app.notify('You selected A')", "Do an A thing", key="a"),
-                Menu.Item("app.notify('You selected B')", "Do an B thing", key="b"),
-                Menu.Item(
-                    "app.notify('You selected Copy to Clipboard')",
-                    "Copy to Clipboard",
-                    key="c",
-                ),
-                Menu.Item("x", "Expand details", key="x"),
-                Menu.Item("1", "This doesn't have a key, but does have a long label"),
-            ]
-        )
         with Contents(id="contents"):
             yield Cursor()
         yield Prompt()
@@ -276,6 +269,21 @@ class Conversation(containers.Vertical):
         agent_response = AgentResponse()
         await self.post(agent_response)
         agent_response.send_prompt(event.body)
+
+    @on(Menu.OptionSelected)
+    async def on_menu_option_selected(self, event: Menu.OptionSelected) -> None:
+        await self.run_action(event.action)
+
+    @on(events.DescendantBlur)
+    def on_descendant_focus(self, event: events.DescendantFocus):
+        if isinstance(event.widget, Contents):
+            self.cursor.visible = False
+
+    @on(Menu.Dismissed)
+    def on_menu_dismissed(self, event: Menu.Dismissed) -> None:
+        event.stop()
+        self.contents.focus()
+        self.cursor.visible = True
 
     def watch_busy_count(self, busy: int) -> None:
         self.throbber.set_class(busy > 0, "-busy")
@@ -298,6 +306,7 @@ class Conversation(containers.Vertical):
         )
         if self.block_cursor < 0:
             self.block_cursor = len(self.blocks) - 1
+            self.contents.focus()
         else:
             self.block_cursor -= 1
 
@@ -312,6 +321,18 @@ class Conversation(containers.Vertical):
 
     def action_dismiss(self) -> None:
         self.block_cursor = -1
+
+    async def action_select_block(self) -> None:
+        block = self.blocks[self.block_cursor]
+        if (
+            block.name is None
+            or (menu_options := CONVERSATION_MENUS.get(block.name, None)) is None
+        ):
+            self.app.bell()
+            return
+        menu = Menu(menu_options)
+        await self.contents.mount(menu, before=block)
+        menu.focus(scroll_visible=False)
 
     def watch_block_cursor(self, block_cursor: int) -> None:
         if block_cursor == -1:
