@@ -1,113 +1,174 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Iterable, Sequence
+from dataclasses import dataclass
+from typing import Iterable, Sequence, TypedDict, Required
 
 from toad._loop import loop_last
-
-type SettingsType = dict[str, object]
 
 
 @dataclass
 class Setting:
-    name: str
-    type: str
-    help: str
+    """A setting or group of setting."""
+
+    key: str
+    title: str
+    type: str = "object"
+    help: str = ""
     validate: list[dict] | None = None
-    choices: list[str] | None = None
     children: list[Setting] | None = None
 
 
-SCHEMA = {
-    "ui": {
-        "Help": "User interface settings",
+class SchemaDict(TypedDict, total=False):
+    """Typing for schema data structure."""
+
+    key: Required[str]
+    title: Required[str]
+    type: Required[str]
+    help: str
+    default: object
+    fields: list[SchemaDict]
+    validate: list[dict]
+
+
+type SettingsType = dict[str, object]
+
+SCHEMA: list[SchemaDict] = [
+    {
+        "key": "ui",
+        "title": "User interface settings",
         "type": "object",
-        "contents": {
-            "column": {
-                "help": "Enable column?",
+        "fields": [
+            {
+                "key": "column",
+                "title": "Enable column?",
+                "help": "Enable for a fixed column size. Disable to use the full screen width.",
                 "type": "boolean",
                 "default": True,
             },
-            "column-width": {
-                "help": "Width of the column, if `column=true`",
+            {
+                "key": "column-width",
+                "title": "Width of the column",
+                "help": "Width of the column if enabled.",
                 "type": "integer",
                 "default": 100,
                 "validate": [{"type": "minimum", "value": 40}],
             },
-            "theme": {
-                "help": "Default Textual theme",
-                "type": "string",
+            {
+                "key": "theme",
+                "title": "Theme",
+                "help": "One of the builtin Textual themes.",
+                "type": "choices",
                 "default": "dracula",
-                "choices": [
-                    "textual-dark",
-                    "textual-light",
-                    "nord",
-                    "gruvbox",
-                    "catppuccin-mocha",
-                    "dracula",
-                    "tokyo-night",
-                    "monokai",
-                    "flexoki",
-                    "catppuccin-late",
-                    "solarized-light",
+                "validate": [
+                    {
+                        "type": "choices",
+                        "choices": [
+                            "textual-dark",
+                            "textual-light",
+                            "nord",
+                            "gruvbox",
+                            "catppuccin-mocha",
+                            "dracula",
+                            "tokyo-night",
+                            "monokai",
+                            "flexoki",
+                            "catppuccin-late",
+                            "solarized-light",
+                        ],
+                    }
                 ],
             },
-        },
+        ],
     },
-    "user": {
-        "help": "User information",
+    {
+        "key": "user",
+        "title": "User information",
+        "help": "Your details.",
         "type": "object",
-        "contents": {
-            "name": {
-                "help": "Your name",
+        "fields": [
+            {
+                "key": "name",
+                "title": "Your name",
                 "type": "string",
                 "default": "",
             },
-            "email": {
-                "help": "Your email",
+            {
+                "key": "email",
+                "title": "Your email",
                 "type": "string",
                 "validate": [{"type": "is_email"}],
                 "default": "",
             },
-        },
+        ],
     },
-    "accounts": {
-        "help": "User accounts",
-        "type": "group",
-        "defaults": ["anthropic", "openai"],
-        "contents": {
-            "key": {
+    {
+        "key": "accounts",
+        "title": "User accounts",
+        "help": "Account information used by AI services.",
+        "type": "list",
+        "default": [
+            {"key": "anthropic", "apikey": "$ANTHROPIC_API_KEY"},
+            {"key": "openai", "apikey": "$OPENAI_API_KEY"},
+        ],
+        "fields": [
+            {
                 "type": "string",
-                "name": "key",
-                "default": "",
-                "help": "API Key",
+                "key": "apikey",
+                "title": "API Key",
             }
-        },
+        ],
     },
-}
+]
 
-INPUT_TYPES = {"boolean", "integer", "string"}
+INPUT_TYPES = {"boolean", "integer", "string", "choices"}
 
 
 class InvalidKey(Exception):
     """The key is not in the schema."""
 
 
+class InvalidValue(Exception):
+    """The value was not of the expected type."""
+
+
 def parse_key(key: str) -> Sequence[str]:
     return key.split(".")
 
 
-def get_setting(settings: dict[str, object], key: str) -> object:
-    for last, key in loop_last(parse_key(key)):
+def get_setting[ExpectType](
+    settings: dict[str, object], key: str, expect_type: type[ExpectType] = object
+) -> ExpectType:
+    """Get a key from a settings structure.
+
+    Args:
+        settings: A settings dictionary.
+        key: A dot delimited key, e.g. "ui.column"
+        expect_type: The expected type of the value.
+
+    Raises:
+        InvalidValue: If the value is not the expected type.
+        KeyError: If the key doesn't exist in settings.
+
+    Returns:
+        The value matching they key.
+    """
+    for last, key_component in loop_last(parse_key(key)):
         if last:
-            return settings[key]
+            result = settings[key_component]
+            if not isinstance(result, expect_type):
+                raise InvalidValue(
+                    f"Expected {expect_type.__name__} type; found {result!r}"
+                )
+            return result
         else:
-            settings = settings[key]
-    return None
+            sub_settings = settings[key_component]
+            assert isinstance(sub_settings, dict)
+            settings = sub_settings
+    raise KeyError(key)
 
 
 class Schema:
-    def __init__(self, schema: SettingsType) -> None:
+    def __init__(self, schema: list[SchemaDict]) -> None:
         self.schema = schema
 
     def set_value(self, settings: SettingsType, key: str, value: object) -> None:
@@ -123,11 +184,13 @@ class Schema:
             if key not in settings:
                 settings = settings[key] = {}
 
-    def build_default(self) -> SettingsType:
-        settings: SettingsType = {}
+    def build_default(self) -> dict[str, object]:
+        settings: dict[str, object] = {}
 
-        def set_defaults(schema: SettingsType, settings: SettingsType) -> None:
-            for key, sub_schema in schema.items():
+        def set_defaults(schema: list[SchemaDict], settings: dict[str, object]) -> None:
+            sub_settings: SettingsType
+            for sub_schema in schema:
+                key = sub_schema["key"]
                 assert isinstance(sub_schema, dict)
                 type = sub_schema["type"]
                 if type in INPUT_TYPES:
@@ -135,78 +198,80 @@ class Schema:
                         settings[key] = default
 
                 elif type == "object":
-                    if contents := sub_schema.get("contents"):
+                    if fields := sub_schema.get("fields"):
                         sub_settings = settings[key] = {}
-                        set_defaults(contents, sub_settings)
+                        set_defaults(fields, sub_settings)
 
-                elif type == "group":
+                elif type == "list":
                     data_settings = settings[key] = {}
-                    if defaults := sub_schema.get("defaults"):
+                    item_fields = sub_schema.get("fields")
+                    assert item_fields is not None
+
+                    if defaults := sub_schema.get("default"):
+                        assert isinstance(defaults, list)
                         for default in defaults:
-                            sub_settings = data_settings[default] = {}
-                            if data_schema := sub_schema.get("contents"):
-                                set_defaults(data_schema, sub_settings)
+                            default = default.copy()
+                            item_key = default.pop("key")
+                            sub_settings = data_settings[item_key] = default
+                            set_defaults(item_fields, sub_settings)
 
         set_defaults(self.schema, settings)
-
         return settings
 
     def get_form_settings(self, settings: dict[str, object]) -> Sequence[Setting]:
         form_settings: list[Setting] = []
 
-        def iter_settings(name: str, schema: SettingsType) -> Iterable[Setting]:
-            schema_type = schema["type"]
+        def iter_settings(name: str, schema: SchemaDict) -> Iterable[Setting]:
+            schema_type = schema.get("type")
+            assert schema_type is not None
             if schema_type in INPUT_TYPES:
                 yield Setting(
                     name,
-                    schema["type"],
-                    schema.get("help", ""),
-                    choices=schema.get("choices"),
+                    schema["title"],
+                    schema_type,
                     validate=schema.get("validate"),
                 )
 
             elif schema_type == "object":
                 yield Setting(
                     name,
-                    schema["type"],
-                    schema.get("help", ""),
-                    choices=schema.get("choices"),
+                    schema["title"],
+                    schema_type,
                     validate=schema.get("validate"),
                     children=[
                         setting
-                        for child_name, schema in schema.get("contents", {}).items()
-                        for setting in iter_settings(f"{name}.{child_name}", schema)
+                        for schema in schema.get("fields", {})
+                        for setting in iter_settings(f"{name}.{schema['key']}", schema)
                     ],
                 )
 
-            elif schema_type == "group":
+            elif schema_type == "list":
                 yield Setting(
                     name,
-                    schema["type"],
-                    schema.get(help, ""),
+                    schema["title"],
+                    schema_type,
                     children=[
                         Setting(
                             f"{name}.{sub_name}",
-                            schema["type"],
-                            schema.get("help", ""),
-                            choices=schema.get("choices"),
+                            "",
                             validate=schema.get("validate"),
                             children=[
                                 setting
-                                for child_name, schema in schema.get(
-                                    "contents", {}
-                                ).items()
+                                for child_schema in schema.get("fields", {})
                                 for setting in iter_settings(
-                                    f"{name}.{sub_name}.{child_name}", schema
+                                    f"{name}.{sub_name}.{child_schema['key']}",
+                                    child_schema,
                                 )
                             ],
                         )
-                        for sub_name in get_setting(settings, name)
+                        for sub_name in get_setting(settings, name, dict)
                     ],
                 )
 
-        for name, schema in self.schema.items():
-            form_settings.extend(iter_settings(name, schema))
+        for schema in self.schema:
+            form_settings.extend(
+                iter_settings(schema["key"], schema),
+            )
         return form_settings
 
 
@@ -216,7 +281,6 @@ if __name__ == "__main__":
 
     install(show_locals=True, width=None)
 
-    # print(SCHEMA)
     schema = Schema(SCHEMA)
     settings = schema.build_default()
     print(settings)
