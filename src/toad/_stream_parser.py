@@ -197,7 +197,7 @@ class StreamParser:
                     yield from send(Token(read_text))
                 else:
                     yield from send(Token(""))
-                    # self._reading = self._gen.send(Token(""))
+
             elif isinstance(self._reading, ReadUntil):
                 if (match := self._reading._regex.search(text)) is not None:
                     start, end = match.span(0)
@@ -217,7 +217,7 @@ class StreamParser:
                 self._reading._buffer.write(text)
                 match_text = self._reading._buffer.getvalue()
                 if (
-                    match := re.match(self._reading.regex, match_text, re.VERBOSE)
+                    match := re.search(self._reading.regex, match_text, re.VERBOSE)
                 ) is not None:
                     end = match.end(0)
                     yield from send(MatchToken(match.group(0), match))

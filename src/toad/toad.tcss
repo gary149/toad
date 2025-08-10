@@ -79,7 +79,10 @@ SettingsScreen {
     #contents {
         width: 50%;
         padding: 0 1;    
-        background: black 10%;                
+        background: black 10%;                    
+        & > VerticalScroll {
+            overflow: auto scroll;
+        }
     }
 
     .hidden {

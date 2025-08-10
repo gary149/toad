@@ -6,10 +6,9 @@ from textual import on
 from textual.app import ComposeResult
 from textual import containers
 from textual.screen import ModalScreen
-from textual.widgets import Input, Label, Select, Checkbox, Footer, Static
+from textual.widgets import Input, Select, Checkbox, Footer, Static
 from textual.compose import compose
 from textual.validation import Validator, Number
-from textual import events
 from textual import getters
 
 from toad.settings import Setting

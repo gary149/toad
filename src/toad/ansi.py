@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from functools import lru_cache
 import io
@@ -19,6 +20,16 @@ from toad._stream_parser import (
     Pattern,
     PatternCheck,
 )
+
+
+def as_int(text: str) -> int:
+    """Convert a string to an integer, or return `0` if conversion is impossible"""
+    if not text.isdecimal():
+        return 0
+    try:
+        return int(text)
+    except ValueError:
+        return 0
 
 
 class CSIPattern(Pattern):
@@ -184,10 +195,11 @@ class ANSIParser(StreamParser):
 
                         elif isinstance(value, OSCPattern.Match):
                             osc_data: list[str] = []
-                            while True:
-                                token = yield self.read_regex(r"[\x1b\0x7]\\")
-                                if isinstance(token, MatchToken):
-                                    break
+
+                            while not isinstance(
+                                token := (yield self.read_regex(r"\x1b\\|\x07")),
+                                MatchToken,
+                            ):
                                 osc_data.append(token.text)
 
                             yield OSC("".join(osc_data))
@@ -463,15 +475,36 @@ ANSI_COLORS: Sequence[str] = [
 
 
 class ANSISegment(NamedTuple):
-    delta_x: int = 0
-    delta_y: int = 0
+    delta_x: int | None = None
+    delta_y: int | None = None
+    absolute_x: int | None = None
+    absolute_y: int | None = None
     content: Content | None = None
+    replace: tuple[int | None, int | None] | None = None
+
+    def get_replace_offsets(
+        self, cursor_offset: int, line_length: int
+    ) -> tuple[int, int]:
+        assert self.replace is not None, (
+            "Only call this if the replace attribute has a value"
+        )
+        replace_start, replace_end = self.replace
+        if replace_start is None:
+            replace_start = cursor_offset
+        if replace_end is None:
+            replace_end = cursor_offset
+        if replace_start < 0:
+            replace_start = line_length + replace_start
+        if replace_end < 0:
+            replace_end = line_length + replace_end
+        return (replace_start, replace_end)
 
 
 class ANSIStream:
     def __init__(self) -> None:
         self.parser = ANSIParser()
         self.style = Style()
+        self.show_cursor = True
 
     @classmethod
     @lru_cache(maxsize=1024)
@@ -531,11 +564,11 @@ class ANSIStream:
 
     def on_token(self, token: ANSIToken) -> Iterable[ANSISegment]:
         if isinstance(token, Separator):
-            if token.text == "\n":
-                yield ANSISegment(0, 1)
-            else:
-                # TODO: Bell, carriage return etc
-                pass
+            separator = token.text
+            if separator == "\n":
+                yield ANSISegment(delta_y=1, absolute_x=0)
+            elif separator == "\r":
+                yield ANSISegment(absolute_x=0)
 
         elif isinstance(token, OSC):
             osc = token.text
@@ -546,19 +579,51 @@ class ANSIStream:
                     self.style += Style(link=link or None)
 
         elif isinstance(token, CSI):
-            if token.text.endswith("m"):
+            token_text = token.text
+            terminator = token_text[-1]
+
+            if terminator == "m":
                 sgr_style = self.parse_sgr(token.text[2:-1])
                 if sgr_style is None:
                     self.style = NULL_STYLE
                 else:
                     self.style += sgr_style
+            elif (match := re.match(r"\x1b\[(\d+)([ABCDGKH])", token_text)) is not None:
+                param, move_type = match.groups()
+                if move_type == "A":
+                    cursor_move = int(param) if param else 1
+                    yield ANSISegment(delta_y=-cursor_move)
+                elif move_type == "B":
+                    cursor_move = int(param) if param else 1
+                    yield ANSISegment(delta_y=+cursor_move)
+                elif move_type == "C":
+                    cursor_move = int(param) if param else 1
+                    yield ANSISegment(delta_x=+cursor_move)
+                elif move_type == "D":
+                    cursor_move = int(param) if param else 1
+                    yield ANSISegment(delta_x=-cursor_move)
+                elif move_type == "K":
+                    erase_type = int(param) if param else 0
+                    if erase_type == 0:
+                        # Clear from cursor to end of line
+                        yield ANSISegment(replace=(None, -1), content=Content(""))
+                    elif erase_type == 1:
+                        # clear from cursor to beginning of line
+                        yield ANSISegment(replace=(0, None), content=Content(""))
+                    elif erase_type == 2:
+                        # clear entire line
+                        yield ANSISegment(
+                            replace=(0, -1), content=Content(""), absolute_x=0
+                        )
+                else:
+                    1 / 0
 
         else:
             if self.style:
                 content = Content.styled(token.text, self.style)
             else:
                 content = Content(token.text)
-            yield ANSISegment(content.cell_length, 0, content)
+            yield ANSISegment(delta_x=len(content), content=content)
 
 
 if __name__ == "__main__":
