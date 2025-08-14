@@ -32,6 +32,8 @@ from toad.widgets.throbber import Throbber
 from toad.widgets.user_input import UserInput
 from toad.widgets.explain import Explain
 from toad.widgets.run_output import RunOutput
+from toad.option_content import OptionContent
+from toad.slash_command import SlashCommand
 
 from toad.menus import CONVERSATION_MENUS
 
@@ -456,6 +458,12 @@ class Conversation(containers.Vertical):
         self.throbber.set_class(busy > 0, "-busy")
 
     async def on_mount(self) -> None:
+        self.prompt.slash_commands = [
+            SlashCommand("/set", "Change a setting"),
+            SlashCommand("/get", "Get a setting"),
+            SlashCommand("/quit", "Quit Toad"),
+            SlashCommand("/help", "Get help"),
+        ]
         self.call_after_refresh(self.post_welcome)
         self.app.settings_changed_signal.subscribe(self, self._settings_changed)
 

@@ -9,12 +9,21 @@ Throbber {
     }   
 } 
 
-
-MarkdownTextArea {
-    & .text-area--cursor {
-        background: $text-error;
+AutoCompleteOptions {
+    border: none;
+    padding: 0 0;
+    width: auto;
+    overlay: screen;
+    constrain: inflect;
+    position: absolute;
+    min-width: 12;
+    
+    
+    & > .option-list--option {
+        padding: 0 1;
     }
 }
+
 
 Conversation {
     height: 1fr;    

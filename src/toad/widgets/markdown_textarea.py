@@ -1,4 +1,5 @@
 from __future__ import annotations
+from dataclasses import dataclass
 from typing import Sequence, TYPE_CHECKING
 
 from rich.text import Text
@@ -6,14 +7,16 @@ from rich.text import Text
 from textual import on
 from textual.content import Content
 from textual.highlight import highlight
+from textual.message import Message
 from textual.widgets import TextArea
-
-if TYPE_CHECKING:
-    from textual.document._document import EditResult
-    from textual.document._edit import Edit
+from textual.widgets.text_area import Selection
 
 
 class MarkdownTextArea(TextArea):
+    @dataclass
+    class CursorMove(Message):
+        selection: Selection
+
     def __init__(
         self,
         text: str = "",
@@ -34,23 +37,28 @@ class MarkdownTextArea(TextArea):
         self._highlight_lines: list[Content] | None = None
         self._text_cache: dict[int, Text] = {}
 
-    def notify_style_update(self) -> None:
+    def _clear_caches(self) -> None:
         self._highlight_lines = None
         self._text_cache.clear()
+
+    def notify_style_update(self) -> None:
+        self._clear_caches()
         return super().notify_style_update()
+
+    def _watch_selection(
+        self, previous_selection: Selection, selection: Selection
+    ) -> None:
+        self.post_message(self.CursorMove(selection))
+        super()._watch_selection(previous_selection, selection)
 
     @property
     def highlight_lines(self) -> Sequence[Content]:
         if self._highlight_lines is None:
-            content = highlight(self.text, language="markdown")
-            content_lines = content.split("\n", allow_blank=True)
+            content = highlight(self.text + "\n```", language="markdown")
+            content_lines = content.split("\n", allow_blank=True)[:-1]
+
             self._highlight_lines = content_lines
         return self._highlight_lines
-
-    # def edit(self, edit: Edit) -> EditResult:
-    #     self._highlight_lines = None
-    #     self._text_cache.clear()
-    #     return super().edit(edit)
 
     @on(TextArea.Changed)
     def _on_changed(self) -> None:
