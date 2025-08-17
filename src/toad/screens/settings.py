@@ -65,11 +65,15 @@ class SettingsScreen(ModalScreen):
                         if setting.help:
                             yield Static(setting.help, classes="help")
                         if setting.type == "string":
-                            yield Input(str(value), classes="input", name=setting.key)
+                            with self.prevent(Input.Changed):
+                                yield Input(
+                                    str(value), classes="input", name=setting.key
+                                )
                         elif setting.type == "boolean":
-                            yield Checkbox(
-                                value=bool(value), classes="input", name=setting.key
-                            )
+                            with self.prevent(Checkbox.Changed):
+                                yield Checkbox(
+                                    value=bool(value), classes="input", name=setting.key
+                                )
                         elif setting.type == "integer":
                             try:
                                 integer_value = int(value)
@@ -83,26 +87,28 @@ class SettingsScreen(ModalScreen):
                                     validators.append(Number(minimum=validate["value"]))
                                 elif validate_type == "maximum":
                                     validators.append(Number(maximum=validate["value"]))
-                            yield Input(
-                                str(integer_value),
-                                type="integer",
-                                classes="input",
-                                name=setting.key,
-                                validators=validators,
-                            )
+                            with self.prevent(Input.Changed):
+                                yield Input(
+                                    str(integer_value),
+                                    type="integer",
+                                    classes="input",
+                                    name=setting.key,
+                                    validators=validators,
+                                )
                         elif setting.type == "choices":
                             select_value = str(value)
                             choices = setting.choices or []
-                            yield Select.from_values(
-                                choices,
-                                value=(
-                                    select_value
-                                    if select_value in choices
-                                    else setting.default
-                                ),
-                                classes="input",
-                                name=setting.key,
-                            )
+                            with self.prevent(Select.Changed):
+                                yield Select.from_values(
+                                    choices,
+                                    value=(
+                                        select_value
+                                        if select_value in choices
+                                        else setting.default
+                                    ),
+                                    classes="input",
+                                    name=setting.key,
+                                )
 
         with containers.Vertical(id="contents"):
             with containers.VerticalGroup(classes="search-container"):

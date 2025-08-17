@@ -64,7 +64,6 @@ class Shell:
                     line = unicode_decoder.decode(data)
                     if line:
                         ansi_log.write(line)
-                        ansi_log.display = True
                 except asyncio.TimeoutError:
                     # Check if process is still running
                     if process.returncode is not None:
