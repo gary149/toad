@@ -3,7 +3,7 @@ from textual.app import ComposeResult
 from textual.screen import Screen
 from textual.reactive import var, reactive
 from textual import getters
-from textual.widgets import Footer
+from textual.widgets import Footer, OptionList
 from textual import containers
 
 from toad.widgets.prompt import AutoCompleteOptions
@@ -32,6 +32,13 @@ class MainScreen(Screen, can_focus=False):
             yield Explain()
             yield Conversation()
             yield Footer()
+
+    @on(OptionList.OptionHighlighted)
+    def on_option_list_option_highlighted(
+        self, event: OptionList.OptionHighlighted
+    ) -> None:
+        if event.option.id is not None:
+            self.conversation.prompt.suggest(event.option.id)
 
     def action_focus_prompt(self) -> None:
         self.conversation.focus_prompt()

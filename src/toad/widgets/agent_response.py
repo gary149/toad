@@ -1,6 +1,4 @@
-import asyncio
-
-from llm import Model, Conversation
+from llm import Conversation
 
 from textual.reactive import var
 from textual import work
@@ -69,6 +67,9 @@ class AgentResponse(Markdown):
     def block_select(self, widget: Widget) -> None:
         self.block_cursor_offset = self.children.index(widget)
 
+    async def append_fragment(self, stream: MarkdownStream, fragment: str) -> None:
+        await stream.write(fragment)
+
     @work
     async def send_prompt(self, prompt: str) -> None:
         stream = Markdown.get_stream(self)
@@ -80,10 +81,11 @@ class AgentResponse(Markdown):
     @work(thread=True)
     def _send_prompt(self, stream: MarkdownStream, prompt: str) -> None:
         """Get the response in a thread."""
+
         self.post_message(messages.WorkStarted())
         try:
             llm_response = self.conversation.prompt(prompt, system=SYSTEM)
             for chunk in llm_response:
-                self.app.call_from_thread(stream.write, chunk)
+                self.app.call_from_thread(self.append_fragment, stream, chunk)
         finally:
             self.post_message(messages.WorkFinished())

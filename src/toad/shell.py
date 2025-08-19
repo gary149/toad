@@ -8,10 +8,15 @@ import fcntl
 import pty
 import struct
 import termios
+from typing import TYPE_CHECKING
 
 from textual.widget import Widget
 
+
 from toad.widgets.ansi_log import ANSILog
+
+if TYPE_CHECKING:
+    from toad.widgets.conversation import Conversation
 
 
 def resize_pty(fd, cols, rows):
@@ -22,30 +27,29 @@ def resize_pty(fd, cols, rows):
 
 
 class Shell:
-    def __init__(self) -> None:
+    def __init__(self, conversation: Conversation) -> None:
+        self.conversation = conversation
         self.ansi_log: ANSILog | None = None
         self.shell = os.environ.get("SHELL", "sh")
-        self.width = 80
-        self.height = 24
         self.master = 0
         self._task: asyncio.Task | None = None
 
-    async def send(self, command: str, ansi_log: ANSILog) -> None:
-        self.ansi_log = ansi_log
-        width = ansi_log.scrollable_content_region.width
-        assert isinstance(ansi_log.parent, Widget)
-        height = (
-            ansi_log.query_ancestor("Window", Widget).scrollable_content_region.height
-            - ansi_log.parent.gutter.height
-            - ansi_log.styles.margin.height
-        )
-        if height < 24:
-            height = 24
+    async def send(self, command: str, width: int, height: int) -> None:
+        # ansi_log = self.ansi_log = await self.conversation.get_ansi_log()
+        # width = ansi_log.scrollable_content_region.width
+        # assert isinstance(ansi_log.parent, Widget)
+        # height = (
+        #     ansi_log.query_ancestor("Window", Widget).scrollable_content_region.height
+        #     - ansi_log.parent.gutter.height
+        #     - ansi_log.styles.margin.height
+        # )
+        # if height < 24:
+        #     height = 24
 
-        command = f"{command}\n"
-
-        self.writer.write(command.encode("utf-8"))
+        self.ansi_log = None
         resize_pty(self.master, width, height)
+        command = f"{command}\n"
+        self.writer.write(command.encode("utf-8"))
 
     def start(self) -> None:
         self._task = asyncio.create_task(self.run())
@@ -97,7 +101,8 @@ class Shell:
         # Create write transport
         writer_protocol = asyncio.BaseProtocol()
         write_transport, _ = await loop.connect_write_pipe(
-            lambda: writer_protocol, os.fdopen(os.dup(master), "wb", 0)
+            lambda: writer_protocol,
+            os.fdopen(os.dup(master), "wb", 0),
         )
         self.writer = write_transport
 
@@ -107,16 +112,17 @@ class Shell:
                 try:
                     # Read with timeout
                     data = await asyncio.wait_for(reader.read(1024 * 16), timeout=None)
-                    # print(repr(data))
-                    if not data:
-                        break
-                    line = unicode_decoder.decode(data)
-                    if line and self.ansi_log is not None:
-                        self.ansi_log.write(line)
                 except asyncio.TimeoutError:
                     # Check if process is still running
                     if process.returncode is not None:
                         break
+                if not data:
+                    break
+                line = unicode_decoder.decode(data)
+                ansi_log = self.ansi_log
+                if ansi_log is None:
+                    ansi_log = self.ansi_log = await self.conversation.get_ansi_log()
+                ansi_log.write(line)
         finally:
             transport.close()
 

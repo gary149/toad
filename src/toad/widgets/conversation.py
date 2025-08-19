@@ -18,7 +18,7 @@ from textual.widget import Widget
 from textual.widgets import Static
 from textual.widgets._markdown import MarkdownBlock, MarkdownFence
 from textual.geometry import Offset, clamp
-from textual.reactive import var
+from textual.reactive import var, Initialize
 from textual.css.query import NoMatches
 from textual.layouts.grid import GridLayout
 from textual.widgets import OptionList
@@ -40,6 +40,7 @@ from toad.menus import CONVERSATION_MENUS
 
 if TYPE_CHECKING:
     from toad.app import ToadApp
+    from toad.widgets.ansi_log import ANSILog
 
 MD = """\
 # Textual Markdown Browser - Demo
@@ -336,7 +337,7 @@ class Cursor(Static):
         self.display = widget is not None
 
     def _update_follow(self) -> None:
-        if self.follow_widget:
+        if self.follow_widget and self.follow_widget.is_attached:
             self.styles.height = max(1, self.follow_widget.outer_size.height)
             follow_y = (
                 self.follow_widget.virtual_region.y
@@ -394,7 +395,10 @@ class Conversation(containers.Vertical):
     prompt = getters.query_one(Prompt)
     app: ToadApp
 
-    shell: var[Shell] = var(Shell)
+    def create_shell(self) -> Shell:
+        return Shell(self)
+
+    shell: var[Shell] = var(Initialize(create_shell))
 
     def compose(self) -> ComposeResult:
         yield Throbber(id="throbber")
@@ -486,13 +490,6 @@ class Conversation(containers.Vertical):
             self.window.focus(scroll_visible=False)
         event.menu.remove()
 
-    @on(OptionList.OptionHighlighted)
-    def on_option_list_option_highlighted(
-        self, event: OptionList.OptionHighlighted
-    ) -> None:
-        if event.option.id is not None:
-            self.prompt.suggest(event.option.id)
-
     def watch_busy_count(self, busy: int) -> None:
         self.throbber.set_class(busy > 0, "-busy")
 
@@ -565,7 +562,7 @@ class Conversation(containers.Vertical):
         self.call_after_refresh(self.refresh_block_cursor)
         event.stop()
 
-    async def post[WidgetType, bound = Widget](
+    async def post[WidgetType: Widget](
         self, widget: WidgetType, anchor: bool = True
     ) -> WidgetType:
         self._blocks = None
@@ -574,13 +571,26 @@ class Conversation(containers.Vertical):
             self.window.anchor()
         return widget
 
-    async def post_shell(self, command: str) -> None:
-        from toad.widgets.shell_result import ShellResult
+    async def get_ansi_log(self) -> ANSILog:
         from toad.widgets.ansi_log import ANSILog
 
+        if self.children and isinstance(self.children[-1], ANSILog):
+            ansi_log = self.children[-1]
+        else:
+            ansi_log = await self.post(ANSILog())
+            await ansi_log.wait_for_refresh()
+        return ansi_log
+
+    async def post_shell(self, command: str) -> None:
+        from toad.widgets.shell_result import ShellResult
+
         await self.post(ShellResult(command))
-        ansi_log = await self.post(ANSILog())
-        self.call_after_refresh(self.shell.send, command, ansi_log)
+        self.call_after_refresh(
+            self.shell.send,
+            command,
+            self.scrollable_content_region.width - 5,
+            self.scrollable_content_region.height - 2,
+        )
 
     def action_cursor_up(self) -> None:
         if not self.contents.children or self.cursor_offset == 0:

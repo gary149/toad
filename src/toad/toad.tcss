@@ -9,7 +9,9 @@ Throbber {
     }   
 } 
 
-
+.-hidden {
+    display: none;
+}
 
 Conversation {
     
@@ -52,12 +54,14 @@ Conversation {
         height: auto;        
     }
     
-    Contents > * {          
-        & > MarkdownBlock:last-child {            
+    Contents > * {       
+        &:last-child {            
+            margin-bottom: 0;
+        }   
+        & > MarkdownBlock:last-child {                        
             margin-bottom: 0;     
         }          
     }
-    
 
     ContentsGrid {
         grid-size: 2;
@@ -81,10 +85,13 @@ Conversation {
                 border-left: inner $text-accent 20%;
             } 
         }
-    }
-        
-    AgentResponse {
-       padding: 0 1 0 1;       
+    }        
+
+    AgentResponse {            
+        padding: 0 1 0 1;       
+        overflow-x: auto;
+        scrollbar-size-horizontal: 0;
+        layout: stream;
     }
 
     ShellResult {        
@@ -98,7 +105,7 @@ Conversation {
         }    
     }
     
-    ANSILog {
+    ANSILog {        
         width: 1fr;
         height: auto;
         padding: 0 1 0 0;
@@ -315,12 +322,6 @@ AutoCompleteOptions {
 
 
 
-AgentResponse {    
-    # margin: 0;
-    # padding: 0;
-    overflow-x: auto;
-    scrollbar-size-horizontal: 0;
-}
 
 MainScreen {
     # hatch: right $foreground 10%;
