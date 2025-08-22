@@ -219,10 +219,14 @@ class StreamParser:
                 if (
                     match := re.search(self._reading.regex, match_text, re.VERBOSE)
                 ) is not None:
+                    token_text = match_text[: match.start(0)]
+                    if token_text:
+                        yield from send(Token(token_text))
                     end = match.end(0)
                     yield from send(MatchToken(match.group(0), match))
                     text = text[end:]
                 else:
+                    yield from send(Token(match_text))
                     text = ""
 
             elif isinstance(self._reading, ReadPatterns):

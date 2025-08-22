@@ -204,7 +204,6 @@ class ANSIParser(StreamParser):
                                 MatchToken,
                             ):
                                 osc_data.append(token.text)
-
                             yield OSC("".join(osc_data))
                             continue
                 else:
@@ -517,6 +516,7 @@ class ANSIStream:
         self.parser = ANSIParser()
         self.style = Style()
         self.show_cursor = True
+        self.current_directory = ""
 
     @classmethod
     @lru_cache(maxsize=1024)
@@ -588,9 +588,13 @@ class ANSIStream:
             osc = token.text
             osc_parameters = osc.split(";")
             if osc_parameters:
-                if osc_parameters[0] == "8":
+                osc_code = osc_parameters[0]
+                osc_parameters = osc_parameters[1:]
+                if osc_code == "8" and osc_parameters:
                     link = osc_parameters[-1]
                     self.style += Style(link=link or None)
+                elif osc_code == "2025" and osc_parameters:
+                    self.current_directory = osc_parameters[0]
 
         elif isinstance(token, CSI):
             token_text = token.text

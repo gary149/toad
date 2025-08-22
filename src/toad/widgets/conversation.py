@@ -32,7 +32,7 @@ from toad.widgets.throbber import Throbber
 from toad.widgets.user_input import UserInput
 from toad.widgets.explain import Explain
 from toad.widgets.run_output import RunOutput
-from toad.shell import Shell
+from toad.shell import Shell, CurrentWorkingDirectoryChanged
 from toad.slash_command import SlashCommand
 from toad.block_protocol import BlockProtocol
 
@@ -490,6 +490,12 @@ class Conversation(containers.Vertical):
         with self.window.prevent(events.DescendantFocus):
             self.window.focus(scroll_visible=False)
         event.menu.remove()
+
+    @on(CurrentWorkingDirectoryChanged)
+    def on_current_working_directory_changed(
+        self, event: CurrentWorkingDirectoryChanged
+    ) -> None:
+        self.prompt.current_directory.path = event.path
 
     def watch_busy_count(self, busy: int) -> None:
         self.throbber.set_class(busy > 0, "-busy")

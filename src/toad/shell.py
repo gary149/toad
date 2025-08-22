@@ -8,8 +8,10 @@ import fcntl
 import pty
 import struct
 import termios
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from textual.message import Message
 from textual.widget import Widget
 
 
@@ -24,6 +26,11 @@ def resize_pty(fd, cols, rows):
     # Pack the dimensions into the format expected by TIOCSWINSZ
     size = struct.pack("HHHH", rows, cols, 0, 0)
     fcntl.ioctl(fd, termios.TIOCSWINSZ, size)
+
+
+@dataclass
+class CurrentWorkingDirectoryChanged(Message):
+    path: str
 
 
 class Shell:
@@ -42,6 +49,9 @@ class Shell:
         resize_pty(self.master, width, height)
         command = f"{command}\n"
         self.writer.write(command.encode("utf-8"))
+
+        get_pwd_command = r'printf "\e]2025;$(pwd);\e\\"' + "\n"
+        self.writer.write(get_pwd_command.encode("utf-8"))
         self.ansi_log = None
 
     def start(self) -> None:
@@ -99,8 +109,7 @@ class Shell:
         )
         self.writer = write_transport
 
-        # self.writer.write("")
-
+        current_directory = ""
         unicode_decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
         try:
             while True:
@@ -108,7 +117,15 @@ class Shell:
                 if line := unicode_decoder.decode(data, final=not data):
                     if self.ansi_log is None:
                         self.ansi_log = await self.conversation.get_ansi_log(self.width)
-                    self.ansi_log.write(line)
+                        self.ansi_log.display = False
+                    if self.ansi_log.write(line):
+                        self.ansi_log.display = True
+                    new_directory = self.ansi_log.current_directory
+                    if new_directory != current_directory:
+                        current_directory = new_directory
+                        self.conversation.post_message(
+                            CurrentWorkingDirectoryChanged(current_directory)
+                        )
                 if not data:
                     break
 

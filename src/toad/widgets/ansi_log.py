@@ -87,6 +87,10 @@ class ANSILog(ScrollView, can_focus=False):
         super().__init__(name=name, id=id, classes=classes, disabled=disabled)
 
     @property
+    def current_directory(self) -> str:
+        return self._ansi_stream.current_directory
+
+    @property
     def _width(self) -> int:
         window_width = self.scrollable_content_region.width or 80
         self.max_window_width = max(self.max_window_width, window_width)
@@ -163,11 +167,12 @@ class ANSILog(ScrollView, can_focus=False):
         self.line_start = 0
         self.refresh()
 
-    def write(self, text: str) -> None:
+    def write(self, text: str) -> bool:
         if not text:
-            return
+            return False
         folded_lines = self._folded_lines
 
+        added_content = False
         for ansi_token in self._ansi_stream.feed(text):
             (
                 delta_x,
@@ -206,6 +211,7 @@ class ANSILog(ScrollView, can_focus=False):
                             line.content[cursor_line_offset + len(content) :],
                         )
                 self.update_line(folded_line.line_no, updated_line)
+                added_content = True
 
             if delta_x is not None:
                 self.cursor_offset += delta_x
@@ -218,6 +224,7 @@ class ANSILog(ScrollView, can_focus=False):
                 self.cursor_offset = absolute_x
             if absolute_y is not None:
                 self.cursor_line = max(0, absolute_y)
+        return added_content
 
     def _fold_line(self, line_no: int, line: Content, width: int) -> list[LineFold]:
         if not width:

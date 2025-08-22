@@ -101,6 +101,7 @@ class Prompt(containers.VerticalGroup):
     prompt_container = getters.query_one("#prompt-container", Widget)
     prompt_text_area = getters.query_one(PromptTextArea)
     prompt_label = getters.query_one("#prompt", Label)
+    current_directory = getters.query_one(CondensedPath)
 
     auto_completes: var[list[Option]] = var(list)
     slash_commands: var[list[SlashCommand]] = var(list)

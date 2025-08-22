@@ -83,10 +83,10 @@ Conversation {
         &> Cursor {
             height: 1;            
             width: 1;
-            border-left: inner $text-accent;
+            border-left: outer $text-accent;
             visibility: visible;
             &.-blink {
-                border-left: inner $text-accent 20%;
+                border-left: outer $text-accent 20%;
             } 
         }
     }        
