@@ -6,11 +6,11 @@ import re
 from dataclasses import dataclass
 from functools import lru_cache
 import io
-from contextlib import suppress
+
 from typing import Generator, Iterable, Mapping, NamedTuple, Sequence
 from textual.color import Color
 from textual.style import Style, NULL_STYLE
-from textual.content import Content
+from textual.content import Content, EMPTY_CONTENT
 
 from toad._stream_parser import (
     MatchToken,
@@ -577,16 +577,23 @@ class ANSIStream:
         for token in self.parser.feed(text):
             yield from self.on_token(token)
 
+    ANSI_SEPARATORS = {
+        "\n": ANSISegment(delta_y=+1, absolute_x=0),
+        "\r": ANSISegment(absolute_x=0),
+        "\x08": ANSISegment(delta_x=-1),
+    }
+    CLEAR_CURSOR_TO_END_OF_LINE = ANSISegment(replace=(None, -1), content=EMPTY_CONTENT)
+    CLEAR_CURSOR_TO_BEGINNING_OF_LINE = ANSISegment(
+        replace=(0, None), content=EMPTY_CONTENT
+    )
+    CLEAR_ENTIRE_LINE = ANSISegment(
+        replace=(0, -1), content=EMPTY_CONTENT, absolute_x=0
+    )
+
     def on_token(self, token: ANSIToken) -> Iterable[ANSISegment]:
         match token:
-            case Separator(text):
-                match text:
-                    case "\n":
-                        yield ANSISegment(delta_y=1, absolute_x=0)
-                    case "\r":
-                        yield ANSISegment(absolute_x=0)
-                    case "\x08":
-                        yield ANSISegment(delta_x=-1)
+            case Separator(separator):
+                yield self.ANSI_SEPARATORS[separator]
 
             case OSC(osc):
                 match osc.split(";"):
@@ -603,40 +610,26 @@ class ANSIStream:
                     else:
                         self.style += sgr_style
                 elif (match := re.match(r"\x1b\[(\d+)([ABCDGKH])", csi)) is not None:
-                    param, move_type = match.groups()
-                    match move_type:
-                        case "A":
+                    match match.groups():
+                        case [param, "A"]:
                             cursor_move = int(param) if param else 1
                             yield ANSISegment(delta_y=-cursor_move)
-                        case "B":
+                        case [param, "B"]:
                             cursor_move = int(param) if param else 1
                             yield ANSISegment(delta_y=+cursor_move)
-                        case "C":
+                        case [param, "C"]:
                             cursor_move = int(param) if param else 1
                             yield ANSISegment(delta_x=+cursor_move)
-                        case "D":
+                        case [param, "D"]:
                             cursor_move = int(param) if param else 1
                             yield ANSISegment(delta_x=-cursor_move)
-                        case "K":
-                            erase_type = int(param) if param else 0
-                            match erase_type:
-                                case 0:
-                                    # Clear from cursor to end of line
-                                    yield ANSISegment(
-                                        replace=(None, -1), content=Content("")
-                                    )
-                                case 1:
-                                    # clear from cursor to beginning of line
-                                    yield ANSISegment(
-                                        replace=(0, None), content=Content("")
-                                    )
-                                case 2:
-                                    # clear entire line
-                                    yield ANSISegment(
-                                        replace=(0, -1),
-                                        content=Content(""),
-                                        absolute_x=0,
-                                    )
+                        case ["0" | "", "K"]:
+                            yield self.CLEAR_CURSOR_TO_END_OF_LINE
+                        case ["1", "K"]:
+                            yield self.CLEAR_CURSOR_TO_BEGINNING_OF_LINE
+                        case ["2", "K"]:
+                            yield self.CLEAR_ENTIRE_LINE
+
             case _:
                 if self.style:
                     content = Content.styled(token.text, self.style)
