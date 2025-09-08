@@ -16,14 +16,6 @@ log = getLogger("acp")
 PROTOCOL_VERSION = 1
 
 
-def expose(name: str = "", prefix: str = ""):
-    def expose_method[T: Callable](callable: T) -> T:
-        callable._jsonrpc_expose = f"{prefix}{callable.__name__ or name}"
-        return callable
-
-    return expose_method
-
-
 class Agent:
     def __init__(self, command: str) -> None:
         self.command = command
@@ -44,13 +36,10 @@ class Agent:
         self.auth_methods: list[protocol.AuthMethod] = []
         self.session_id: str = ""
         self.server = jsonrpc.Server()
-        for method_name in dir(self):
-            method = getattr(self, method_name)
-            if (jsonrpc_expose := getattr(method, "_jsonrpc_expose", None)) is not None:
-                self.server.method(jsonrpc_expose)(method)
+        self.server.expose_instance(self)
 
     def start(self) -> None:
-        self._agent_task = asyncio.create_task(self.run_client())
+        self._agent_task = asyncio.create_task(self.run_agent())
 
     def send(self, request: jsonrpc.Request) -> None:
         if self._process is None:
@@ -62,12 +51,12 @@ class Agent:
     def request(self) -> jsonrpc.Request:
         return API.request(self.send)
 
-    @expose()
+    @jsonrpc.expose()
     def greet(self, name: str) -> str:
         print("Called greet!")
         return f"Hello, {name}!"
 
-    async def run_client(self) -> None:
+    async def run_agent(self) -> None:
         PIPE = asyncio.subprocess.PIPE
 
         process = self._process = await asyncio.create_subprocess_shell(
@@ -90,12 +79,18 @@ class Agent:
                 await self.server.call(response)
 
         while line := await process.stdout.readline():
-            response = json.loads(line.decode("utf-8"))
-
-            if isinstance(response, dict):
-                await handle_response_object(response)
-            elif isinstance(response, list):
-                for response_object in response:
+            # This line should contain JSON, which may be:
+            #   A) a JSONRPC request
+            #   B) a JSONRPC response to a previous request
+            try:
+                agent_data = json.loads(line.decode("utf-8"))
+            except Exception:
+                # TODO: handle this
+                raise
+            if isinstance(agent_data, dict):
+                await handle_response_object(agent_data)
+            elif isinstance(agent_data, list):
+                for response_object in agent_data:
                     if isinstance(response_object, dict):
                         await handle_response_object(response_object)
 
@@ -122,8 +117,6 @@ class Agent:
                 },
             )
         response = await initialize_response.wait()
-        print("GOT RESPONSE")
-        print(response)
         self.agent_capabilities = response["agentCapabilities"]
         self.auth_methods = response["authMethods"]
 
@@ -131,9 +124,7 @@ class Agent:
         with self.request():
             session_new_response = api.session_new(str(self.project_path), [])
         response = await session_new_response.wait()
-        print("NEW SESSION")
-        print(response)
-        self.session_id = response["sessionID"]
+        self.session_id = response["sessionId"]
 
 
 if __name__ == "__main__":

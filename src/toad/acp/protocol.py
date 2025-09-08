@@ -46,4 +46,4 @@ class McpServer(TypedDict):
 
 
 class NewSessionResponse(TypedDict):
-    sessionID: str
+    sessionId: str

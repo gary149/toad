@@ -26,6 +26,16 @@ type JSONList = list[JSONType]
 log = logging.getLogger("jsonrpc")
 
 
+def expose(name: str = "", prefix: str = ""):
+    """Expose a method."""
+
+    def expose_method[T: Callable](callable: T) -> T:
+        callable._jsonrpc_expose = f"{prefix}{callable.__name__ or name}"
+        return callable
+
+    return expose_method
+
+
 class NoDefault:
     def __repr__(self) -> str:
         return "NO_DEFAULT"
@@ -116,6 +126,13 @@ class Server:
             return await self._dispatch_object(json)
         else:
             return await self._dispatch_batch(json)
+
+    def expose_instance(self, instance: object) -> None:
+        """Add methods from the given instance."""
+        for method_name in dir(instance):
+            method = getattr(instance, method_name)
+            if (jsonrpc_expose := getattr(method, "_jsonrpc_expose", None)) is not None:
+                self.method(jsonrpc_expose)(method)
 
     async def _dispatch_object(self, json: JSONObject) -> JSONType | None:
         json_id = json.get("id")
