@@ -217,7 +217,6 @@ class DiffView(containers.VerticalGroup):
     code_after: reactive[str] = reactive("")
     path1: reactive[str] = reactive("")
     path2: reactive[str] = reactive("")
-    language: reactive[str | None] = reactive(None)
     split: reactive[bool] = reactive(True, recompose=True)
     annotations: var[bool] = var(False, toggle_class="-with-annotations")
     auto_split: var[bool] = var(False)
@@ -286,6 +285,7 @@ class DiffView(containers.VerticalGroup):
         """
 
         def prepare() -> None:
+            """Call properties which will lazily update data structures."""
             self.grouped_opcodes
             self.highlighted_code_lines
 
@@ -330,7 +330,7 @@ class DiffView(containers.VerticalGroup):
                 ):
                     code_a_spans.append(Span(i1, i2, "on $error 40%"))
 
-                if tag in ("insert") and "\n" not in code_a.plain[j1 : j2 + 1]:
+                if tag == "insert" and "\n" not in code_a.plain[j1 : j2 + 1]:
                     code_b_spans.append(Span(j1, j2, "on $success 40%"))
 
             code_a = code_a.add_spans(code_a_spans)
@@ -342,29 +342,32 @@ class DiffView(containers.VerticalGroup):
         return self._highlighted_code_lines
 
     def compose(self) -> ComposeResult:
+        """Compose either split or unified view."""
         if self.split:
             yield from self.compose_split()
         else:
             yield from self.compose_unified()
 
-    async def on_resize(self, event: events.Resize) -> None:
+    def _check_auto_split(self, width: int):
         if self.auto_split:
             lines_a, lines_b = self.highlighted_code_lines
             split_width = max([line.cell_length for line in (lines_a + lines_b)]) * 2
-            split_width += (
+            split_width += 4 + 2 * (
                 max(
                     [
                         len(str(len(lines_a))),
                         len(str(len(lines_b))),
                     ]
                 )
-                + 4
-            ) * 2
-            if self.annotations:
-                split_width += 3 * 2
-            else:
-                split_width += 2
-            self.split = event.size.width >= split_width
+            )
+            split_width += 3 * 2 if self.annotations else 2
+            self.split = width >= split_width
+
+    async def on_resize(self, event: events.Resize) -> None:
+        self._check_auto_split(event.size.width)
+
+    async def on_mount(self) -> None:
+        self._check_auto_split(self.size.width)
 
     def compose_unified(self) -> ComposeResult:
         lines_a, lines_b = self.highlighted_code_lines
@@ -384,23 +387,23 @@ class DiffView(containers.VerticalGroup):
             )
             for tag, i1, i2, j1, j2 in group:
                 if tag == "equal":
-                    for line_offset, line in enumerate(lines_a[i1:i2]):
+                    for line_offset, line in enumerate(lines_a[i1:i2], 1):
                         annotations.append(" ")
-                        line_numbers_a.append(i1 + line_offset + 1)
-                        line_numbers_b.append(j1 + line_offset + 1)
+                        line_numbers_a.append(i1 + line_offset)
+                        line_numbers_b.append(j1 + line_offset)
                         code_lines.append(line)
                     continue
                 if tag in {"replace", "delete"}:
-                    for line_offset, line in enumerate(lines_a[i1:i2]):
+                    for line_offset, line in enumerate(lines_a[i1:i2], 1):
                         annotations.append("-")
-                        line_numbers_a.append(i1 + line_offset + 1)
+                        line_numbers_a.append(i1 + line_offset)
                         line_numbers_b.append(None)
                         code_lines.append(line)
                 if tag in {"replace", "insert"}:
-                    for line_offset, line in enumerate(lines_b[j1:j2]):
+                    for line_offset, line in enumerate(lines_b[j1:j2], 1):
                         annotations.append("+")
                         line_numbers_a.append(None)
-                        line_numbers_b.append(j1 + line_offset + 1)
+                        line_numbers_b.append(j1 + line_offset)
                         code_lines.append(line)
 
             NUMBER_STYLES = self.NUMBER_STYLES
@@ -518,7 +521,7 @@ class DiffView(containers.VerticalGroup):
 
             if line_numbers_a or line_numbers_b:
                 line_number_width = max(
-                    len("" if line_no is None else str(line_no))
+                    0 if line_no is None else len(str(line_no))
                     for line_no in (line_numbers_a + line_numbers_b)
                 )
             else:
@@ -547,7 +550,7 @@ class DiffView(containers.VerticalGroup):
             with containers.HorizontalGroup(classes="diff-group"):
                 # Before line numbers
                 yield LineAnnotations(
-                    starmap(format_number, zip(line_numbers_b, annotations_b))
+                    starmap(format_number, zip(line_numbers_a, annotations_a))
                 )
                 # Before annotations
                 yield LineAnnotations(
