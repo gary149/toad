@@ -206,8 +206,11 @@ class Server:
                     parameter_type,
                     collection_check_strategy=CollectionCheckStrategy.ALL_ITEMS,
                 )
-            except TypeCheckError:
-                raise InvalidParams("Parameter is not the expected type", id=request_id)
+            except TypeCheckError as error:
+                raise InvalidParams(
+                    f"Parameter is not the expected type ({parameter_type}); {error}",
+                    id=request_id,
+                )
 
         if isinstance(params, list):
             parameter_items = [

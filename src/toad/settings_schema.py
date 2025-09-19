@@ -80,6 +80,21 @@ SCHEMA: list[SchemaDict] = [
         ],
     },
     {
+        "key": "diff",
+        "title": "Diff view settings",
+        "help": "Customize how diffs are displayed.",
+        "type": "object",
+        "fields": [
+            {
+                "key": "view",
+                "title": "View",
+                "default": "auto",
+                "type": "choices",
+                "choices": ["unified", "split", "auto"],
+            }
+        ],
+    },
+    {
         "key": "user",
         "title": "User information",
         "help": "Your details.",

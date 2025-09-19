@@ -392,12 +392,15 @@ class Prompt(containers.VerticalGroup):
     @on(Question.Answer)
     def on_question_answer(self, event: Question.Answer) -> None:
         """Question has been answered."""
+        event.stop()
 
         def remove_question() -> None:
             """Remove the question and restore the text prompt."""
             self.ask = None
 
-        event.stop()
+        if self.ask is not None and (callback := self.ask.callback) is not None:
+            callback(event.answer)
+
         self.set_timer(0.4, remove_question)
 
     def suggest(self, suggestion: str) -> None:

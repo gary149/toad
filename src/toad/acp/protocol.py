@@ -39,29 +39,6 @@ class AuthMethod(SchemaDict, total=False):
     name: Required[str]
 
 
-# ---------------------------------------------------------------------------------------
-# RPC responses
-
-
-class InitializeResponse(SchemaDict, total=False):
-    agentCapabilities: AgentCapabilities
-    authMethods: list[AuthMethod]
-    protocolVersion: Required[int]
-
-
-class NewSessionResponse(SchemaDict, total=False):
-    sessionId: Required[str]
-
-
-class SessionPromptResponse(SchemaDict, total=False):
-    stopReason: Required[
-        Literal["end_turn", "max_tokens", "max_turn_requests", "refusal", "cancelled"]
-    ]
-
-
-# ---------------------------------------------------------------------------------------
-
-
 class EnvVariable(SchemaDict, total=False):
     name: str
     value: str
@@ -216,16 +193,17 @@ class ToolCall(SchemaDict, total=False):
     toolCallId: Required[ToolCallId]
 
 
+# https://agentclientprotocol.com/protocol/schema#toolcallupdate
 class ToolCallUpdate(SchemaDict, total=False):
+    _meta: dict
     content: list | None
     kind: ToolKind | None
     locations: list | None
     rawInput: dict
     rawOutput: dict
-    sessionUpdate: Required[Literal["tool_call_update"]]
     status: ToolCallStatus | None
     title: str | None
-    toolCallId: ToolCallId
+    toolCallId: Required[ToolCallId]
 
 
 class PlanEntry(SchemaDict, total=False):
@@ -303,3 +281,32 @@ class OutcomeSelected(TypedDict, total=False):
 class RequestPermissionOutcome(TypedDict, total=False):
     cancelled: OutcomeCancelled
     selected: OutcomeSelected
+
+
+# ---------------------------------------------------------------------------------------
+# RPC responses
+
+
+class InitializeResponse(SchemaDict, total=False):
+    agentCapabilities: AgentCapabilities
+    authMethods: list[AuthMethod]
+    protocolVersion: Required[int]
+
+
+class NewSessionResponse(SchemaDict, total=False):
+    sessionId: Required[str]
+
+
+class SessionPromptResponse(SchemaDict, total=False):
+    stopReason: Required[
+        Literal["end_turn", "max_tokens", "max_turn_requests", "refusal", "cancelled"]
+    ]
+
+
+# https://agentclientprotocol.com/protocol/schema#requestpermissionresponse
+class RequestPermissionResponse(TypedDict, total=False):
+    _meta: dict
+    outcome: Required[RequestPermissionOutcome]
+
+
+# ---------------------------------------------------------------------------------------

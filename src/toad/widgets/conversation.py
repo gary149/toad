@@ -5,6 +5,8 @@ from functools import cached_property
 from typing import TYPE_CHECKING
 from pathlib import Path
 
+from typing import Callable, Any
+
 from textual import on, work
 from textual.app import ComposeResult
 from textual import containers
@@ -26,6 +28,7 @@ import llm
 from toad import messages
 from toad.acp import messages as acp_messages
 from toad.app import ToadApp
+from toad.acp import protocol as acp_protocol
 from toad.agent import AgentBase
 from toad.widgets.menu import Menu
 from toad.widgets.note import Note
@@ -36,14 +39,13 @@ from toad.widgets.explain import Explain
 from toad.shell import Shell, CurrentWorkingDirectoryChanged
 from toad.slash_command import SlashCommand
 from toad.protocol import BlockProtocol, MenuProtocol
-
-
 from toad.menus import CONVERSATION_MENUS, MenuItem
 
 if TYPE_CHECKING:
     from toad.widgets.ansi_log import ANSILog
     from toad.widgets.agent_response import AgentResponse
     from toad.widgets.agent_thought import AgentThought
+    from toad.widgets.question import Answer
 
 MD = """\
 # Textual Markdown Browser - Demo
@@ -449,6 +451,7 @@ class Conversation(containers.Vertical):
         return llm.get_model(self.app.settings.get("llm.model", str)).conversation()
 
     async def get_agent_response(self) -> AgentResponse:
+        """Get or create an agent response widget."""
         from toad.widgets.agent_response import AgentResponse
 
         if self._agent_response is None:
@@ -461,6 +464,7 @@ class Conversation(containers.Vertical):
         return self._agent_response
 
     async def get_agent_thought(self) -> AgentThought:
+        """Get or create an agent thought widget."""
         from toad.widgets.agent_thought import AgentThought
 
         if self._agent_thought is None:
@@ -610,6 +614,77 @@ class Conversation(containers.Vertical):
         agent_thought = await self.get_agent_thought()
         await agent_thought.append_fragment(message.text)
 
+    @on(acp_messages.ACPRequestPermission)
+    async def on_acp_request_permission(
+        self, message: acp_messages.ACPRequestPermission
+    ):
+        from toad.widgets.question import Answer
+
+        message.stop()
+        await self.post_tool_call(message.tool_call)
+        self.ask(
+            [
+                Answer(
+                    option["name"],
+                    option["optionId"],
+                )
+                for option in message.options
+            ],
+            callback=message.result_future.set_result,
+        )
+
+    async def post_tool_call(
+        self, tool_call_update: acp_protocol.ToolCallUpdate
+    ) -> None:
+        self.log("post_tool_call")
+        self.log(tool_call_update)
+        if not isinstance((contents := tool_call_update.get("content", None)), list):
+            return
+
+        for content in contents:
+            match content:
+                case {
+                    "type": "diff",
+                    "oldText": old_text,
+                    "newText": new_text,
+                    "path": path,
+                }:
+                    await self.post_diff(path, old_text, new_text)
+
+    async def post_diff(self, path: str, before: str, after: str) -> None:
+        """Post a diff view.
+
+        Args:
+            path: Path to the file.
+            before: Content of file before edit.
+            after: Content of file after edit.
+        """
+        self.notify(f"post_diff {path}")
+        from toad.widgets.diff_view import DiffView
+
+        diff_view = DiffView(path, path, before, after)
+        diff_view_setting = self.app.settings.get("diff.view", str)
+        diff_view.split = diff_view_setting == "split"
+        diff_view.auto_split = diff_view_setting == "auto"
+        await self.post(diff_view)
+
+    def ask(
+        self,
+        options: list[Answer],
+        question: str = "",
+        callback: Callable[[Answer], Any] | None = None,
+    ) -> None:
+        """Replace the prompt with a dialog to ask a question
+
+        Args:
+            question: Question to ask or empty string to omit.
+            options: A list of (ANSWER, ANSWER_ID) tuples.
+            callback: Optional callable that will be invoked with the result.
+        """
+        from toad.widgets.question import Ask
+
+        self.prompt.ask = Ask(question, options, callback)
+
     async def on_mount(self) -> None:
         self.prompt.focus()
         self.prompt.slash_commands = [
@@ -645,6 +720,7 @@ class Conversation(containers.Vertical):
             Note(f"Settings read from [$text-success]'{self.app.settings_path}'"),
             anchor=True,
         )
+
         # notes_path = Path(__file__).parent / "../../../notes.md"
         # from toad.widgets.markdown_note import MarkdownNote
 

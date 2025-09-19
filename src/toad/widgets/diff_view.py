@@ -344,7 +344,7 @@ class DiffView(containers.VerticalGroup):
                 ):
                     code_a_spans.append(Span(i1, i2, "on $error 40%"))
 
-                if tag == "insert" and "\n" not in code_a.plain[j1 : j2 + 1]:
+                if tag == "insert" and "\n" not in code_b.plain[j1 : j2 + 1]:
                     code_b_spans.append(Span(j1, j2, "on $success 40%"))
 
             code_a = code_a.add_spans(code_a_spans)

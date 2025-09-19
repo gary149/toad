@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any, Callable, NamedTuple
 
 from textual.app import ComposeResult
 from textual import events, on
@@ -12,7 +13,13 @@ from textual.message import Message
 from textual.widget import Widget
 from textual.widgets import Label
 
-type Options = list[tuple[str, str]]
+
+class Answer(NamedTuple):
+    text: str
+    id: str
+
+
+type Options = list[Answer]
 
 
 @dataclass
@@ -21,6 +28,7 @@ class Ask:
 
     question: str
     options: Options
+    callback: Callable[[Answer], Any] | None = None
 
 
 class NonSelectableLabel(Label):
@@ -126,7 +134,7 @@ class Question(Widget, can_focus=True):
         """User selected a response."""
 
         index: int
-        option_id: str
+        answer: Answer
 
     def __init__(
         self,
@@ -178,7 +186,12 @@ class Question(Widget, can_focus=True):
         self.selection = min(len(self.options) - 1, self.selection + 1)
 
     def action_select(self) -> None:
-        self.post_message(self.Answer(self.selected, self.options[self.selected][1]))
+        self.post_message(
+            self.Answer(
+                index=self.selected,
+                answer=self.options[self.selected],
+            )
+        )
         self.selected = True
 
     @on(Option.Selected)
@@ -193,10 +206,10 @@ if __name__ == "__main__":
     from textual.widgets import Footer
 
     OPTIONS = [
-        ("Yes, allow once", "proceed_always"),
-        ("Yes, allow always", "allow_always"),
-        ("Modify with external editor", "modify"),
-        ("No, suggest changes (esc)", "reject"),
+        Answer("Yes, allow once", "proceed_always"),
+        Answer("Yes, allow always", "allow_always"),
+        Answer("Modify with external editor", "modify"),
+        Answer("No, suggest changes (esc)", "reject"),
     ]
 
     class QuestionApp(App):

@@ -110,17 +110,32 @@ class Agent(AgentBase):
                 message_target.post_message(messages.ACPThinking(type, text))
 
     @jsonrpc.expose("session/request_permission")
-    def rpc_request_permission(
+    async def rpc_request_permission(
         self,
         sessionId: str,
         options: list[protocol.PermissionOption],
         toolCall: protocol.ToolCallUpdate,
         _meta: dict | None = None,
-    ):
-        if (message_target := self._message_target) is None:
-            return
-        message_target.post_message(messages.ACPRequestPermission(options, toolCall))
-        pass
+    ) -> protocol.RequestPermissionResponse:
+        print("REQUEST PERMISSION")
+        # if (message_target := self._message_target) is None:
+        #     return
+        assert self._message_target is not None
+        result_future: asyncio.Future[tuple[str, str]] = asyncio.Future()
+        self._message_target.post_message(
+            messages.ACPRequestPermission(options, toolCall, result_future)
+        )
+        await result_future
+        result = result_future.result()
+        outcome, option_id = result
+        return {
+            "outcome": {
+                "selected": {
+                    "outcome": outcome,
+                    "optionId": option_id,
+                },
+            },
+        }
 
     @jsonrpc.expose("fs/read_text_file")
     def rpc_read_text_file(
@@ -168,7 +183,6 @@ class Agent(AgentBase):
 
         assert process.stdout is not None
         assert process.stdin is not None
-        stdin = process.stdin
 
         results = []
 
@@ -178,6 +192,18 @@ class Agent(AgentBase):
             elif "method" in response:
                 result = await self.server.call(response)
                 results.append(result)
+
+        tasks: set[asyncio.Task] = set()
+
+        async def call_jsonrpc(request: jsonrpc.JSONObject | jsonrpc.JSONList) -> None:
+            print("calling", request)
+            result = await self.server.call(request)
+            print("result", result)
+            result_json = json.dumps(result).encode("utf-8")
+            if process.stdin is not None:
+                process.stdin.write(b"%s\n" % result_json)
+            if (task := asyncio.current_task()) is not None:
+                tasks.discard(task)
 
         while line := await process.stdout.readline():
             # This line should contain JSON, which may be:
@@ -192,20 +218,38 @@ class Agent(AgentBase):
                 raise
 
             if isinstance(agent_data, dict):
-                await handle_response_object(agent_data)
-            elif isinstance(agent_data, list):
-                for response_object in agent_data:
-                    if isinstance(response_object, dict):
-                        await handle_response_object(response_object)
+                if "result" in agent_data or "error" in agent_data:
+                    API.process_response(agent_data)
+                    continue
 
-            if results:
-                try:
-                    json_result = json.dumps(
-                        results[0] if len(results) == 1 else results
-                    )
-                    stdin.write(b"%s\n" % json_result.encode("utf-8"))
-                finally:
-                    results.clear()
+            elif isinstance(agent_data, list):
+                if not all(isinstance(datum, dict) for datum in agent_data):
+                    log.warning(f"Data sent invalid data: {agent_data!r}")
+                    continue
+                if all(("result" in datum or "error" in datum) for datum in agent_data):
+                    API.process_response(agent_data)
+                    continue
+
+            # By this point we know it
+            print("JSONRPC CALL")
+            print(agent_data)
+            tasks.add(asyncio.create_task(call_jsonrpc(agent_data)))
+
+            # if isinstance(agent_data, dict):
+            #     await handle_response_object(agent_data)
+            # elif isinstance(agent_data, list):
+            #     for response_object in agent_data:
+            #         if isinstance(response_object, dict):
+            #             await handle_response_object(response_object)
+
+            # if results:
+            #     try:
+            #         json_result = json.dumps(
+            #             results[0] if len(results) == 1 else results
+            #         )
+            #         stdin.write(b"%s\n" % json_result.encode("utf-8"))
+            #     finally:
+            #         results.clear()
 
         print("exit")
 

@@ -91,8 +91,10 @@ Conversation {
     #cursor-container {            
         height: auto;
         width: 1;        
-        visibility: hidden;        
+        # visibility: hidden;        
         
+        outline-left: outer $foreground 7%;
+
         &> Cursor {
             height: 1;            
             width: 1;                                    
