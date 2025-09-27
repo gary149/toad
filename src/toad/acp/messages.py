@@ -26,7 +26,7 @@ class Update(AgentMessage):
 @dataclass
 class RequestPermission(AgentMessage):
     options: list[protocol.PermissionOption]
-    tool_call: protocol.ToolCallUpdate
+    tool_call: protocol.ToolCallUpdatePermissionRequest
     result_future: Future[Answer]
 
 

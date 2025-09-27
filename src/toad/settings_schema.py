@@ -77,6 +77,17 @@ SCHEMA: list[SchemaDict] = [
                     "tokyo-night",
                 ],
             },
+            {
+                "key": "throbber",
+                "title": "Thinking animation",
+                "help": "Animation to show while the agent is busy",
+                "type": "choices",
+                "default": "quotes",
+                "choices": [
+                    "pulse",
+                    "quotes",
+                ],
+            },
         ],
     },
     {

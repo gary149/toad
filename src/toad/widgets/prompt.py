@@ -238,6 +238,7 @@ class Prompt(containers.VerticalGroup):
             return False
         if text.split(" ", 1)[0] in (
             "python",
+            "git",
             "ls",
             "cat",
             "cd",

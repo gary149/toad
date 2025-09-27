@@ -477,8 +477,9 @@ class Conversation(containers.Vertical):
             self._agent_thought = None
 
         if self._agent_thought is None:
-            self._agent_thought = AgentThought("")
+            agent_thought = self._agent_thought = AgentThought("")
             await self.post(self._agent_thought, loading=True)
+            return agent_thought
         return self._agent_thought
 
     @property
@@ -563,11 +564,14 @@ class Conversation(containers.Vertical):
 
     @on(Menu.OptionSelected)
     async def on_menu_option_selected(self, event: Menu.OptionSelected) -> None:
-        self.window.focus(scroll_visible=False)
         await event.menu.remove()
+        self.window.focus(scroll_visible=False)
 
         if event.action is not None:
-            await self.run_action(event.action, {"block": event.owner})
+            # await self.run_action(event.action, {"block": event.owner})
+            self.call_after_refresh(
+                self.run_action, event.action, {"block": event.owner}
+            )
         # await event.menu.remove()
         # self.cursor.visible = True
 
@@ -671,9 +675,10 @@ class Conversation(containers.Vertical):
         self,
         result_future: Future[Answer],
         options: list[Answer],
-        tool_call_update: acp_protocol.ToolCallUpdate,
+        tool_call_update: acp_protocol.ToolCallUpdatePermissionRequest,
     ) -> None:
         kind = tool_call_update.get("kind")
+        print(f"request_permission {kind=}")
         if kind is None:
             from toad.widgets.tool_call import ToolCall
 
@@ -711,6 +716,7 @@ class Conversation(containers.Vertical):
             result = await self.app.push_screen_wait(permissions_screen)
             result_future.set_result(result)
         elif kind == "execute":
+            print("EXECUTE")
             title = tool_call_update.get("title", "") or ""
 
             def answer_callback(answer: Answer) -> None:
@@ -983,8 +989,9 @@ class Conversation(containers.Vertical):
             return
 
         menu_options = [
-            MenuItem("Copy to clipboard", "copy_to_clipboard", "c"),
-            MenuItem("Copy to prompt", "copy_to_prompt", "p"),
+            MenuItem("[u]C[/]opy to clipboard", "copy_to_clipboard", "c"),
+            MenuItem("Co[u]p[/u]y to prompt", "copy_to_prompt", "p"),
+            MenuItem("Open as S[u]V[/]G", "export_to_svg", "v"),
         ]
 
         if isinstance(block, MenuProtocol):
@@ -1019,9 +1026,11 @@ class Conversation(containers.Vertical):
 
             menu = Menu(block, menu_options)
         else:
-            self.notify("This block has no menu", title="Menu", severity="information")
-            self.app.bell()
-            return
+            # menu_options.extend(block.get_block_menu())
+            menu = Menu(block, menu_options)
+            # self.notify("This block has no menu", title="Menu", severity="information")
+            # self.app.bell()
+            # return
 
         menu.offset = Offset(1, block.region.offset.y)
         await self.mount(menu)
@@ -1051,6 +1060,42 @@ class Conversation(containers.Vertical):
         if text:
             self.prompt.append(text)
             self.focus_prompt()
+
+    def action_export_to_svg(self) -> None:
+        block = self.get_cursor_block()
+        if block is None:
+            return
+        import platformdirs
+        from textual._compositor import Compositor
+        from textual._files import generate_datetime_filename
+
+        width, height = block.outer_size
+        compositor = Compositor()
+        compositor.reflow(block, block.outer_size)
+        render = compositor.render_full_update()
+
+        from rich.console import Console
+        import io
+        import os.path
+
+        console = Console(
+            width=width,
+            height=height,
+            file=io.StringIO(),
+            force_terminal=True,
+            color_system="truecolor",
+            record=True,
+            legacy_windows=False,
+            safe_box=False,
+        )
+        console.print(render)
+        path = platformdirs.user_pictures_dir()
+        svg_filename = generate_datetime_filename("Toad", ".svg", None)
+        svg_path = os.path.expanduser(os.path.join(path, svg_filename))
+        console.save_svg(svg_path)
+        import webbrowser
+
+        webbrowser.open(f"file:///{svg_path}")
 
     def action_explain(self, topic: str | None = None) -> None:
         if (block := self.get_cursor_block(MarkdownBlock)) is not None and block.source:

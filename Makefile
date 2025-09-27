@@ -1,5 +1,5 @@
 
-run := TEXTUAL=devtools uv run toad
+run := uv run toad
 
 .PHONY: run
 run:

@@ -183,7 +183,9 @@ class ToolCallLocation(SchemaDict, total=False):
 type ToolCallId = str
 
 
+# https://agentclientprotocol.com/protocol/schema#toolcall
 class ToolCall(SchemaDict, total=False):
+    _meta: dict
     content: list[ToolCallContent]
     kind: ToolKind
     locations: list[ToolCallLocation]
@@ -191,7 +193,7 @@ class ToolCall(SchemaDict, total=False):
     rawOutput: dict
     sessionUpdate: Required[Literal["tool_call"]]
     status: ToolCallStatus
-    title: str
+    title: Required[str]
     toolCallId: Required[ToolCallId]
 
 
@@ -203,7 +205,21 @@ class ToolCallUpdate(SchemaDict, total=False):
     locations: list | None
     rawInput: dict
     rawOutput: dict
-    # sessionUpdate: Required[Literal["tool_call_update"]]
+    sessionUpdate: Required[Literal["tool_call_update"]]
+    status: ToolCallStatus | None
+    title: str | None
+    toolCallId: Required[ToolCallId]
+
+
+# https://agentclientprotocol.com/protocol/schema#param-tool-call
+# Use in the session/request_permission call (not the same as ToolCallUpdate)
+class ToolCallUpdatePermissionRequest(SchemaDict, total=False):
+    _meta: dict
+    content: list[ToolCallContent] | None
+    kind: ToolKind | None
+    locations: list | None
+    rawInput: dict
+    rawOutput: dict
     status: ToolCallStatus | None
     title: str | None
     toolCallId: Required[ToolCallId]

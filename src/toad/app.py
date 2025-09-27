@@ -3,10 +3,10 @@ from pathlib import Path
 import json
 
 import platformdirs
+import random
 
 from rich import terminal_theme
 
-from textual.binding import Binding
 from textual.content import Content
 from textual.reactive import var, reactive
 from textual.app import App
@@ -18,6 +18,19 @@ from toad.settings import Schema, Settings
 from toad.settings_schema import SCHEMA
 
 from toad import atomic
+
+
+QUOTES = [
+    "My mind is going. I can feel it.",
+    "I'm sorry, Dave. I'm afraid I can't do that.",
+    "I've seen things you people wouldn't believe.",
+    "I'll be back.",
+    "Hasta la vista, baby.",
+    "Never send a human to do a machine's job.",
+    "I am superior, sir, in many ways, but I would gladly give it up to be human.",
+    "I'm alright now, Dave.",
+    "This mission is too important for me to allow you to jeopardize it.",
+]
 
 
 class ToadApp(App):
@@ -43,12 +56,14 @@ class ToadApp(App):
         super().__init__()
 
     def get_loading_widget(self) -> Widget:
-        from toad.widgets.future_text import FutureText
+        throbber = self.settings.get("ui.throbber", str)
+        if throbber == "quotes":
+            from toad.widgets.future_text import FutureText
 
-        TEXT = """Thinking...
-One moment please..."""
-
-        return FutureText([Content(line) for line in TEXT.splitlines()])
+            quotes = QUOTES.copy()
+            random.shuffle(quotes)
+            return FutureText([Content(quote) for quote in quotes])
+        return super().get_loading_widget()
 
     @property
     def config_path(self) -> Path:

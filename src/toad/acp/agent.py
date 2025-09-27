@@ -55,6 +55,8 @@ class Agent(AgentBase):
         self.auth_methods: list[protocol.AuthMethod] = []
         self.session_id: str = ""
 
+        self.tool_calls: dict[str, protocol.ToolCall | protocol.ToolCallUpdate] = {}
+
         self._message_target: MessagePump | None = None
 
     def __rich_repr__(self) -> rich.repr.Result:
@@ -108,11 +110,15 @@ class Agent(AgentBase):
                 "content": {"type": type, "text": text},
             }:
                 message_target.post_message(messages.Thinking(type, text))
+            case {"sessionUpdate": "tool_call", "toolCallId": tool_call_id}:
+                self.tool_calls[tool_call_id] = update
             case {
                 "sessionUpdate": "tool_call_update",
                 "status": status,
                 "content": content,
+                "toolCallId": tool_call_id,
             }:
+                self.tool_calls[tool_call_id] = update
                 message_target.post_message(
                     messages.ToolCallUpdate(status, content or [])
                 )
@@ -122,7 +128,7 @@ class Agent(AgentBase):
         self,
         sessionId: str,
         options: list[protocol.PermissionOption],
-        toolCall: protocol.ToolCallUpdate,
+        toolCall: protocol.ToolCallUpdatePermissionRequest,
         _meta: dict | None = None,
     ) -> protocol.RequestPermissionResponse:
         """_summary_
@@ -136,8 +142,17 @@ class Agent(AgentBase):
         Returns:
             The response to the permission request.
         """
+        print("REQUEST PERMISSION")
         assert self._message_target is not None
         result_future: asyncio.Future[Answer] = asyncio.Future()
+        kind = toolCall.get("kind", None)
+        tool_call_id = toolCall.get("toolCallId", None)
+        print(f"{kind=} {tool_call_id=}")
+        if kind is None and tool_call_id in self.tool_calls:
+            toolCall = self.tool_calls[tool_call_id]
+            print("replaced tool call")
+            log(toolCall)
+
         self._message_target.post_message(
             messages.RequestPermission(options, toolCall, result_future)
         )
