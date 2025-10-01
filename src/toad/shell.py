@@ -123,12 +123,12 @@ class Shell:
         unicode_decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
         try:
             while True:
-                # await asyncio.sleep(1 / 60)
                 data = await reader.read(BUFFER_SIZE)
                 if line := unicode_decoder.decode(data, final=not data):
                     if self.ansi_log is None:
-                        self.ansi_log = await self.conversation.get_ansi_log(self.width)
-                        self.ansi_log.display = False
+                        self.ansi_log = await self.conversation.get_ansi_log(
+                            self.width, display=False
+                        )
                     if self.ansi_log.write(line):
                         self.ansi_log.display = True
                     new_directory = self.ansi_log.current_directory

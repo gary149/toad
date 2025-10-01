@@ -856,14 +856,16 @@ class Conversation(containers.Vertical):
             self.window.anchor()
         return widget
 
-    async def get_ansi_log(self, width: int) -> ANSILog:
+    async def get_ansi_log(self, width: int, display: bool = True) -> ANSILog:
         from toad.widgets.ansi_log import ANSILog
 
         if self.children and isinstance(self.children[-1], ANSILog):
             ansi_log = self.children[-1]
         else:
-            ansi_log = await self.post(ANSILog(minimum_terminal_width=width))
-            await ansi_log.wait_for_refresh()
+            ansi_log = ANSILog(minimum_terminal_width=width)
+            ansi_log.display = display
+            ansi_log = await self.post(ansi_log)
+            # await ansi_log.wait_for_refresh()
         return ansi_log
 
     async def post_shell(self, command: str) -> None:

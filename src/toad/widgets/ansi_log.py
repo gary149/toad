@@ -190,6 +190,14 @@ class ANSILog(ScrollView, can_focus=False):
         self.refresh()
 
     def write(self, text: str) -> bool:
+        """Write to the log.
+
+        Args:
+            text: New text (and escape sequences).
+
+        Returns:
+            `True` if the log output changed, otherwise `False`.
+        """
         if not text:
             return False
         folded_lines = self._folded_lines
@@ -206,8 +214,10 @@ class ANSILog(ScrollView, can_focus=False):
             ) = ansi_token
             while self.cursor_line >= len(folded_lines):
                 self.add_line(Content())
+                added_content = True
 
             folded_line = folded_lines[self.cursor_line]
+            previous_content = folded_line.content
             line = self._lines[folded_line.line_no]
 
             if content is not None:
@@ -232,8 +242,10 @@ class ANSILog(ScrollView, can_focus=False):
                             content,
                             line.content[cursor_line_offset + len(content) :],
                         )
+
                 self.update_line(folded_line.line_no, updated_line)
-                added_content = True
+                if not previous_content.is_same(folded_line.content):
+                    added_content = True
 
             if delta_x is not None:
                 self.cursor_offset += delta_x
