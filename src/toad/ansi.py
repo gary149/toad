@@ -592,7 +592,6 @@ class ANSIStream:
     @classmethod
     @lru_cache(maxsize=1024)
     def _parse_csi(cls, csi: str) -> ANSISegment | None:
-        print(repr(csi))
         if match := re.match(r"\x1b\[(\d+)?(?:;)?(\d*)?(\w)", csi):
             match match.groups():
                 case [lines, "", "A"]:
