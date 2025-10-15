@@ -129,9 +129,6 @@ class ANSILog(ScrollView, can_focus=False):
         return
         yield
 
-    #     yield MenuItem("Copy to clipboard", "copy_to_clipboard", "c")
-    #     yield MenuItem("Copy to prompt", "copy_to_prompt", "p")
-
     def action_copy_to_clipboard(self) -> None:
         self.notify("Copy to clipboard")
 
@@ -156,6 +153,7 @@ class ANSILog(ScrollView, can_focus=False):
         self._clear_caches()
         self._reflow()
 
+    @property
     def allow_select(self) -> bool:
         return True
 
@@ -219,6 +217,11 @@ class ANSILog(ScrollView, can_focus=False):
             folded_line = folded_lines[self.cursor_line]
             previous_content = folded_line.content
             line = self._lines[folded_line.line_no]
+            if delta_y:
+                # If we are moving the cursor, simplify the line (reduce segments)
+                line = self._lines[folded_line.line_no] = LineRecord(
+                    line.content.simplify(), line.folds, line.updates
+                )
 
             if content is not None:
                 cursor_line_offset = self.cursor_line_offset
@@ -340,7 +343,7 @@ class ANSILog(ScrollView, can_focus=False):
         self.refresh(Region(0, line_no, self._width, refresh_lines))
 
     def on_idle(self):
-        self._update_width()
+        # self._update_width()
         self._update_virtual_size()
 
     def render_line(self, y: int) -> Strip:
