@@ -293,7 +293,13 @@ class Settings:
             if not isinstance(
                 (sub_settings := sub_settings.setdefault(sub_key, {})), dict
             ):
-                return expect_type()
+                default = self._schema.get_default(key)
+                if default is None:
+                    default = expect_type()
+                if not isinstance(default, expect_type):
+                    default = expect_type(default)
+                assert isinstance(default, expect_type)
+                return default
         assert False, "Can't get here"
 
     def set(self, key: str, value: object) -> None:
@@ -304,7 +310,12 @@ class Settings:
                     setting[sub_key] = value
                     self._changed = True
             else:
-                setting = setting.setdefault(sub_key, {})
+                setting_node = setting.setdefault(sub_key, {})
+                if isinstance(setting_node, dict):
+                    setting = setting_node
+                else:
+                    setting = setting[sub_key] = {}
+
         if self._on_set_callback is not None:
             self._on_set_callback(key, value)
 

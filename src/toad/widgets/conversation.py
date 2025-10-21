@@ -873,15 +873,20 @@ class Conversation(containers.Vertical):
 
     @property
     def shell(self) -> Shell:
+        assert isinstance(self.app, ToadApp)
         system = platform.system()
         if system == "Darwin":
-            shell_command_key = "shell.macos"
+            shell_command = self.app.settings.get("shell.macos.run", str, expand=False)
+            shell_start = self.app.settings.get("shell.macos.start", str, expand=False)
         else:
-            shell_command_key = "shell.linux"
-        shell_command = self.app.settings.get(shell_command_key, str, expand=False)
+            shell_command = self.app.settings.get("shell.linux.run", str, expand=False)
+            shell_start = self.app.settings.get("shell.linux.start", str, expand=False)
+
         if self._shell is None or self._shell.is_finished:
             shell_directory = self.working_directory
-            self._shell = Shell(self, shell_directory, shell=shell_command)
+            self._shell = Shell(
+                self, shell_directory, shell=shell_command, start=shell_start
+            )
             self._shell.start()
         return self._shell
 
