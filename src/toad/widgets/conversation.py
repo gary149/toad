@@ -779,9 +779,13 @@ class Conversation(containers.Vertical):
         notes_path = Path(__file__).parent / "../../../notes.md"
         from toad.widgets.markdown_note import MarkdownNote
 
-        await self.post(
-            MarkdownNote(notes_path.read_text(), name="read_text", classes="note")
-        )
+        # Notes are a temporary "feature"
+        try:
+            await self.post(
+                MarkdownNote(notes_path.read_text(), name="read_text", classes="note")
+            )
+        except Exception:
+            pass
 
     def watch_agent(self, agent: AgentBase | None) -> None:
         if agent is None:
