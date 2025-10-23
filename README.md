@@ -73,6 +73,9 @@ uv run toad acp "gemini --experimental-acp" --project-dir ~/sandbox
 
 Agents need to be installed separately, and require support for [ACP](https://agentclientprotocol.com/overview/introduction).
 
+You will need to install the agent and authenticate at least once with the agent's own CLI tool.
+After that you can use Toad to interact with it.
+
 ### Gemini
 
 Gemini has ACP support out of the box:
@@ -97,6 +100,10 @@ Codex requires [codex-acp](https://github.com/zed-industries/codex-acp). Once in
 uv run toad acp "codex-acp"
 ```
 
+### Other agents
+
+There are other agents that support ACP.
+Replace the command to launch them as above and they should work.
 
 ## Thanks
 
