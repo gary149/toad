@@ -765,21 +765,18 @@ class Conversation(containers.Vertical):
         # from toad.widgets.welcome import Welcome
 
         # await self.post(Welcome(classes="note", name="welcome"), anchor=False)
-        await self.post(
-            Note(f"Settings read from [$text-success]'{self.app.settings_path}'"),
-            anchor=True,
-        )
+
         await self.post(
             Note(f"project directory is [$text-success]'{self.project_path!s}'"),
             anchor=True,
         )
 
-        # notes_path = Path(__file__).parent / "../../../notes.md"
-        # from toad.widgets.markdown_note import MarkdownNote
+        notes_path = Path(__file__).parent / "../../../notes.md"
+        from toad.widgets.markdown_note import MarkdownNote
 
-        # await self.post(
-        #     MarkdownNote(notes_path.read_text(), name="read_text", classes="note")
-        # )
+        await self.post(
+            MarkdownNote(notes_path.read_text(), name="read_text", classes="note")
+        )
 
         # from toad.widgets.agent_response import AgentResponse
 
@@ -1154,4 +1151,4 @@ class Conversation(containers.Vertical):
             from toad import about
             from toad.widgets.markdown_note import MarkdownNote
 
-            await self.post(MarkdownNote(about.render(), classes="about"))
+            await self.post(MarkdownNote(about.render(self.app), classes="about"))
