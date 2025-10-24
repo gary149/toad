@@ -211,26 +211,28 @@ class Mandelbrot(Static):
                     # Set dot if not in the Mandelbrot set
                     if iterations < max_iterations:
                         braille_key |= 1 << dot_idx
-
                         colors.append(
                             COLORS[
                                 int((iterations / max_iterations) * (len(COLORS) - 1))
                             ]
                         )
 
-                patch_red = 0
-                patch_green = 0
-                patch_blue = 0
+                if colors:
+                    patch_red = 0
+                    patch_green = 0
+                    patch_blue = 0
+                    for red, green, blue in colors:
+                        patch_red = max(red, patch_red)
+                        patch_green = max(green, patch_green)
+                        patch_blue = max(blue, patch_blue)
 
-                for red, green, blue in colors:
-                    patch_red = max(red, patch_red)
-                    patch_green = max(green, patch_green)
-                    patch_blue = max(blue, patch_blue)
-
-                patch_color = Color(patch_red, patch_green, patch_blue)
-
-                line.append(BRAILLE_MAP[braille_key])
-                spans.append(Span(column, column + 1, Style(foreground=patch_color)))
+                    patch_color = Color(patch_red, patch_green, patch_blue)
+                    line.append(BRAILLE_MAP[braille_key])
+                    spans.append(
+                        Span(column, column + 1, Style(foreground=patch_color))
+                    )
+                else:
+                    line.append(" ")
 
             lines.append(Content("".join(line), spans=spans).simplify())
 
@@ -247,9 +249,7 @@ if __name__ == "__main__":
             align: center middle;
             background: $panel;
             Mandelbrot {
-                background: black 20%;
-                # width: 1fr;
-                # height: 1fr;
+                background: black 20%;                
                 width: 40;
                 height: 16;
             }
