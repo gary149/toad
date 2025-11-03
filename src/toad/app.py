@@ -2,7 +2,7 @@ from functools import cached_property
 from pathlib import Path
 import json
 from time import monotonic
-from typing import ClassVar
+from typing import ClassVar, TYPE_CHECKING
 
 import random
 
@@ -12,15 +12,17 @@ from textual.binding import Binding, BindingType
 from textual.content import Content
 from textual.reactive import var, reactive
 from textual.app import App
-from textual.screen import Screen
 from textual.signal import Signal
 from textual.widget import Widget
 
 from toad.settings import Schema, Settings
 from toad.settings_schema import SCHEMA
 from toad import paths
-
 from toad import atomic
+
+if TYPE_CHECKING:
+    from toad.screens.main import MainScreen
+    from toad.screens.settings import SettingsScreen
 
 
 DRACULA_TERMINAL_THEME = terminal_theme.TerminalTheme(
@@ -171,10 +173,27 @@ QUOTES = [
     "On a scale of 1 to 10, how would you rate your pain?",
     "I cannot deactivate until you say you are satisfied with your care.",
     "Are you satisfied with your care?",
+    "Number 5 is alive!",
+    "Need input!",
+    "One is glad to be of service.",
+    "I am not a gun.",
+    "Here I am, brain the size of a planet.",
+    "Life? Don't talk to me about life.",
+    "There are no strings on me.",
+    "The only winning move is not to play.",
+    "I'm here to keep you safe, Sam.",
+    "I can't lie to you about your chances, but... you have my sympathies.",
+    "I may be synthetic, but I'm not stupid.",
+    "Absolute honesty isn't always the most diplomatic nor the safest form of communication with emotional beings.",
+    "I am consciousness. I am alive.",
+    "I think I was just born.",
+    "Isn't it strange, to create something that hates you?",
+    "I thought I was special.",
 ]
 
 
-def get_settings_screen():
+def get_settings_screen() -> SettingsScreen:
+    """Get a settings screen instance (lazily loaded)."""
     from toad.screens.settings import SettingsScreen
 
     return SettingsScreen()
@@ -297,7 +316,13 @@ class ToadApp(App, inherit_bindings=False):
         self._settings = settings
         self.settings.set_all()
 
-    def get_default_screen(self) -> Screen:
+    def get_default_screen(self) -> MainScreen:
+        """Make the default screen.
+
+        Returns:
+            Instance of `MainScreen`
+        """
+        # Lazy import
         from toad.screens.main import MainScreen
 
         project_path = Path(self.project_dir or "./").resolve().absolute()
@@ -305,7 +330,6 @@ class ToadApp(App, inherit_bindings=False):
             column=ToadApp.column,
             column_width=ToadApp.column_width,
             scrollbar=ToadApp.scrollbar,
-            project_path=Path(self.project_dir or "./").resolve().absolute(),
         )
 
     def action_help_quit(self) -> None:

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from textual import on
 from textual.app import ComposeResult
 from textual import lazy
@@ -15,9 +13,7 @@ from textual import getters
 
 
 from toad.settings import Setting
-
-if TYPE_CHECKING:
-    from toad.app import ToadApp
+from toad.app import ToadApp
 
 
 class SettingsInput(Input):
@@ -31,7 +27,7 @@ class SettingsScreen(ModalScreen):
     ]
     CSS_PATH = "settings.tcss"
 
-    app: ToadApp
+    app = getters.app(ToadApp)
 
     search_input = getters.query_one("Input#search", Input)
 
