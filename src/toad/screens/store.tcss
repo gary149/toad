@@ -1,0 +1,29 @@
+StoreScreen {    
+
+    #title-container {
+        align: center top;
+        
+        #title-grid {
+            border: block black 20%;
+            background: black 20%;
+            grid-size: 2 1;
+            # max-width: 100;
+            height: auto;
+            grid-columns: 30 1fr;
+            grid-rows: auto;
+            grid-gutter: 1 2;
+            min-width: 40;
+
+            #info {
+                
+            }
+
+            Mandelbrot {   
+                border: none;             
+                height: 100%;                                                
+                # min-height: 8;
+            }
+        }
+    }
+
+}

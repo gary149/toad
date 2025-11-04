@@ -122,6 +122,9 @@ if __name__ == "__main__":
             # background: blue 20%;        
             border: blank;
 
+            &:hover {
+                background: $panel;
+            }
 
             &.-highlight {
                 border: tall $primary;
