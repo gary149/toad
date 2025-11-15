@@ -3,7 +3,7 @@ from __future__ import annotations
 import rich.repr
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache
 import io
 
@@ -655,7 +655,7 @@ class ANSIStream:
         Returns:
             Ansi segment, or `None` if one couldn't be decoded.
         """
-        print(repr(csi))
+
         if match := re.fullmatch(r"\x1b\[(\d+)?(?:;)?(\d*)?(\w)", csi):
             match match.groups(default=""):
                 case [lines, "", "A"]:
@@ -735,6 +735,273 @@ class ANSIStream:
                 else:
                     content = Content(text)
                 yield ANSICursor(delta_x=len(content), content=content)
+
+
+class LineFold(NamedTuple):
+    line_no: int
+    """The line number."""
+
+    line_offset: int
+    """The index of the folded line."""
+
+    offset: int
+    """The offset within the original line."""
+
+    content: Content
+    """The content."""
+
+    updates: int = 0
+    """Integer that increments on update."""
+
+
+@dataclass
+class LineRecord:
+    content: Content
+    folds: list[LineFold] = field(default_factory=list)
+    updates: int = 0
+
+
+@dataclass
+class Buffer:
+    lines: list[LineRecord] = field(default_factory=list)
+    line_to_fold: list[int] = field(default_factory=list)
+    folded_lines: list[LineFold] = field(default_factory=list)
+
+    cursor_line: int = 0
+    """Folder line index."""
+    cursor_offset: int = 0
+    """Folded line offset."""
+
+    max_line_width: int = 0
+
+    updates: int = 0
+
+    @property
+    def line_count(self) -> int:
+        return len(self.lines)
+
+
+class TerminalState:
+    """Abstract terminal state (no renderer)."""
+
+    def __init__(self, width: int = 80, height: int = 24) -> None:
+        self._ansi_stream = ANSIStream()
+        """ANSI stream processor."""
+
+        self.width = width
+        """Width of the terminal."""
+        self.height = height
+        """Height of the terminal."""
+
+        self.show_cursor = True
+        """Is the cursor visible?"""
+        self.alternate_screen = False
+        """Is the terminal in the alternate buffer state?"""
+
+        self.current_directory: str = ""
+        """Current working directory."""
+
+        self.scrollback_buffer = Buffer()
+        """Scrollbar buffer lines."""
+        self.alternate_buffer = Buffer()
+        """Alternate buffer lines."""
+
+        self._updates: int = 0
+
+    @property
+    def buffer(self) -> Buffer:
+        """The buffer (scrollack or alternate)"""
+        if self.alternate_buffer:
+            return self.alternate_buffer
+        return self.scrollback_buffer
+
+    def advance_updates(self) -> int:
+        """Advance the `updates` integer and return it.
+
+        Returns:
+            int: Updates.
+        """
+        self._updates += 1
+        return self._updates
+
+    def update_size(self, width: int | None = None, height: int | None = None) -> None:
+        """Update the dimensions of the terminal.
+
+        Args:
+            width: New width, or `None` for no change.
+            height: New height, or `None` for no change.
+        """
+        if width is not None:
+            self.width = width
+        if height is not None:
+            self.height = height
+
+    def write(self, text: str) -> None:
+        """Write to the terminal.
+
+        Args:
+            text: Text to write.
+        """
+        for ansi_command in self._ansi_stream.feed(text):
+            self._handle_ansi_command(ansi_command)
+
+    def get_cursor_line_offset(self, buffer: Buffer) -> int:
+        """The cursor offset within the un-folded lines."""
+        cursor_folded_line = buffer.folded_lines[buffer.cursor_line]
+        cursor_line_offset = cursor_folded_line.line_offset
+        line_no = cursor_folded_line.line_no
+        line = buffer.lines[line_no]
+        position = 0
+        for folded_line_offset, folded_line in enumerate(line.folds):
+            if folded_line_offset == cursor_line_offset:
+                position += buffer.cursor_offset
+                break
+            position += len(folded_line.content)
+        return position
+
+    def _handle_ansi_command(self, ansi_command: ANSICommand) -> None:
+        match ansi_command:
+            case ANSICursor(delta_x, delta_y, absolute_x, absolute_y, content, replace):
+                buffer = self.buffer
+                folded_lines = buffer.folded_lines
+                if buffer.cursor_line >= len(folded_lines):
+                    while buffer.cursor_line >= len(folded_lines):
+                        self.add_line(buffer, Content())
+
+                folded_line = folded_lines[buffer.cursor_line]
+                previous_content = folded_line.content
+                line = buffer.lines[folded_line.line_no]
+
+                if content is not None:
+                    cursor_line_offset = self.get_cursor_line_offset(buffer)
+
+                    if replace is not None:
+                        start_replace, end_replace = ansi_command.get_replace_offsets(
+                            cursor_line_offset, len(line.content)
+                        )
+                        updated_line = Content.assemble(
+                            line.content[:start_replace],
+                            content,
+                            line.content[end_replace + 1 :],
+                        )
+                    else:
+                        if cursor_line_offset == len(line.content):
+                            updated_line = line.content + content
+                        else:
+                            updated_line = Content.assemble(
+                                line.content[:cursor_line_offset],
+                                content,
+                                line.content[cursor_line_offset + len(content) :],
+                            )
+
+                    self.update_line(buffer, folded_line.line_no, updated_line)
+                    if not previous_content.is_same(folded_line.content):
+                        buffer.updates = self.advance_updates()
+
+                if delta_x is not None:
+                    buffer.cursor_offset += delta_x
+                    while buffer.cursor_offset > self.width:
+                        buffer.cursor_line += 1
+                        buffer.cursor_offset -= self.width
+                if absolute_x is not None:
+                    buffer.cursor_offset = absolute_x
+
+                current_cursor_line = buffer.cursor_line
+                if delta_y is not None:
+                    buffer.cursor_line = max(0, buffer.cursor_line + delta_y)
+                if absolute_y is not None:
+                    buffer.cursor_line = max(0, absolute_y)
+
+                if current_cursor_line != buffer.cursor_line:
+                    line.content.simplify()  # Reduce segments
+                    self._line_updated(buffer, current_cursor_line)
+                    self._line_updated(buffer, buffer.cursor_line)
+
+            case ANSICursorShow(show_cursor):
+                self.show_cursor = show_cursor
+
+            case ANSIAlternateBuffer(alternate_buffer):
+                self.alternate_buffer = alternate_buffer
+
+            case ANSIWorkingDirectory(path):
+                self.current_directory = path
+                # self.finalize()
+
+    def _line_updated(self, buffer: Buffer, line_no: int) -> None:
+        """Mark a line has having been udpated.
+
+        Args:
+            buffer: Buffer to use.
+            line_no: Line number to mark as updated.
+        """
+        try:
+            buffer.lines[line_no].updates = self.advance_updates()
+        except IndexError:
+            pass
+
+    def _fold_line(self, line_no: int, line: Content, width: int) -> list[LineFold]:
+        updates = self.advance_updates()
+        if not width:
+            return [LineFold(0, 0, 0, line, updates)]
+        line_length = line.cell_length
+        if line_length <= width:
+            return [LineFold(line_no, 0, 0, line, updates)]
+        divide_offsets = list(range(width, line_length, width))
+        folded_lines = [folded_line for folded_line in line.divide(divide_offsets)]
+        offsets = [0, *divide_offsets]
+        folds = [
+            LineFold(line_no, line_offset, offset, folded_line, updates)
+            for line_offset, (offset, folded_line) in enumerate(
+                zip(offsets, folded_lines)
+            )
+        ]
+        assert len(folds)
+        return folds
+
+    def add_line(self, buffer: Buffer, content: Content) -> None:
+        updates = self.advance_updates()
+        line_no = buffer.line_count
+        width = self.width
+        line_record = LineRecord(
+            content, self._fold_line(line_no, content, width), updates
+        )
+        buffer.lines.append(line_record)
+        folds = line_record.folds
+        buffer.line_to_fold.append(len(buffer.folded_lines))
+        buffer.folded_lines.extend(folds)
+
+        buffer.updates = updates
+
+    def update_line(self, buffer: Buffer, line_index: int, line: Content) -> None:
+        while line_index >= len(buffer.lines):
+            self.add_line(buffer, Content())
+
+        updates = self.advance_updates()
+
+        line_expanded_tabs = line.expand_tabs(8)
+        buffer.max_line_width = max(
+            line_expanded_tabs.cell_length, buffer.max_line_width
+        )
+
+        line_record = buffer.lines[line_index]
+        line_record.content = line
+        line_record.folds[:] = self._fold_line(
+            line_index, line_expanded_tabs, self.width
+        )
+        line_record.updates = updates
+
+        fold_line = buffer.line_to_fold[line_index]
+        del buffer.line_to_fold[line_index:]
+        del buffer.folded_lines[fold_line:]
+
+        for line_no in range(line_index, buffer.line_count):
+            line_record = buffer.lines[line_no]
+            # line_record.updates += 1
+            buffer.line_to_fold.append(len(buffer.folded_lines))
+            for fold in line_record.folds:
+                buffer.folded_lines.append(fold)
+
+        # self.refresh(Region(0, line_index, self._width, refresh_lines))
 
 
 if __name__ == "__main__":

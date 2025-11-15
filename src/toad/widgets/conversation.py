@@ -55,7 +55,7 @@ if TYPE_CHECKING:
     from toad.widgets.ansi_log import ANSILog
     from toad.widgets.agent_response import AgentResponse
     from toad.widgets.agent_thought import AgentThought
-    from toad.widgets.terminal import Terminal
+    from toad.widgets.terminal_tool import TerminalTool
 
 
 class Loading(Static):
@@ -231,7 +231,7 @@ class Conversation(containers.Vertical):
         self.set_reactive(Conversation.working_directory, str(project_path))
         self.agent_slash_commands: list[SlashCommand] = []
         self.slash_command_hints: dict[str, str] = {}
-        self.terminals: dict[str, Terminal] = {}
+        self.terminals: dict[str, TerminalTool] = {}
         self._loading: Loading | None = None
         self._agent_response: AgentResponse | None = None
         self._agent_thought: AgentThought | None = None
@@ -613,7 +613,7 @@ class Conversation(containers.Vertical):
         self.agent_slash_commands = slash_commands
         self.update_slash_commands()
 
-    def get_terminal(self, terminal_id: str) -> Terminal | None:
+    def get_terminal(self, terminal_id: str) -> TerminalTool | None:
         """Get a terminal from its id.
 
         Args:
@@ -622,10 +622,10 @@ class Conversation(containers.Vertical):
         Returns:
             Terminal instance, or `None` if no terminal was found.
         """
-        from toad.widgets.terminal import Terminal
+        from toad.widgets.terminal_tool import TerminalTool
 
         try:
-            terminal = self.contents.query_one(f"#{terminal_id}", Terminal)
+            terminal = self.contents.query_one(f"#{terminal_id}", TerminalTool)
         except NoMatches:
             return None
         if terminal.released:
@@ -643,7 +643,7 @@ class Conversation(containers.Vertical):
     @work
     @on(acp_messages.CreateTerminal)
     async def on_acp_create_terminal(self, message: acp_messages.CreateTerminal):
-        from toad.widgets.terminal import Terminal, Command
+        from toad.widgets.terminal_tool import TerminalTool, Command
 
         command = Command(
             message.command,
@@ -654,7 +654,7 @@ class Conversation(containers.Vertical):
         width = self.window.size.width - 5 - self.window.styles.scrollbar_size_vertical
         height = self.window.scrollable_content_region.height - 2
 
-        terminal = Terminal(
+        terminal = TerminalTool(
             command,
             output_byte_limit=message.output_byte_limit,
             id=message.terminal_id,

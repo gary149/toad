@@ -269,7 +269,7 @@ Conversation {
         # }      
     }
 
-    Terminal {
+    TerminalTool {
         height: auto;   
         border: panel $text-secondary 90%;          
         padding: 1 1 0 1;                

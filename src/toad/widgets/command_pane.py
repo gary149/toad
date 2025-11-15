@@ -12,14 +12,16 @@ import termios
 from textual.message import Message
 
 from toad.shell_read import shell_read
-from toad.widgets.ansi_log import ANSILog
+
+# from toad.widgets.ansi_log import ANSILog
+from toad.widgets.terminal import Terminal
 
 
 class CommandError(Exception):
     """An error occurred running the command."""
 
 
-class CommandPane(ANSILog):
+class CommandPane(Terminal):
     def __init__(
         self,
         name: str | None = None,
@@ -121,12 +123,21 @@ class CommandPane(ANSILog):
 if __name__ == "__main__":
     from textual.app import App, ComposeResult
 
+    COMMAND = """python cursor_test.py"""
+
     class CommandApp(App):
         CSS = """
+        Screen {
+            align: center middle;
+        }
         CommandPane {
-            background: blue 20%;
+            # background: blue 20%;
+            scrollbar-gutter: stable;
+            background: black 10%;
             max-height: 20;
             # border: green;
+            border: tab $text-primary;            
+            margin: 0 2;
         }
         """
 
@@ -135,10 +146,8 @@ if __name__ == "__main__":
 
         def on_mount(self) -> None:
             command_pane = self.query_one(CommandPane)
-            self.call_after_refresh(
-                command_pane.execute,
-                "uv run python test_cursor_toggle.py",
-            )
+            command_pane.border_title = COMMAND
+            self.call_after_refresh(command_pane.execute, COMMAND)
 
     app = CommandApp()
     app.run()

@@ -14,7 +14,7 @@ from toad.acp.encode_tool_call_id import encode_tool_call_id
 from toad.acp.agent import Mode
 
 if TYPE_CHECKING:
-    from toad.widgets.terminal import TerminalState
+    from toad.widgets.terminal_tool import TerminalState
 
 
 class AgentMessage(Message):

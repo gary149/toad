@@ -315,7 +315,7 @@ class Agent(AgentBase):
     async def rpc_terminal_output(
         self, sessionId: str, terminalId: str, _meta: dict | None = None
     ) -> protocol.TerminalOutputResponse:
-        from toad.widgets.terminal import TerminalState
+        from toad.widgets.terminal_tool import TerminalState
 
         result_future: asyncio.Future[TerminalState] = asyncio.Future()
 
