@@ -5,8 +5,8 @@ from time import monotonic
 async def shell_read(
     reader: asyncio.StreamReader,
     buffer_size: int,
-    buffer_period: float | None = 1 / 60,
-    max_buffer_duration: float = 1 / 20,
+    buffer_period: float | None = 1 / 100,
+    max_buffer_duration: float = 1 / 60,
 ) -> bytes:
     """Read data from a stream reader, with buffer logic to reduce the number of chunks.
 

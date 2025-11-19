@@ -135,6 +135,9 @@ if __name__ == "__main__":
     # COMMAND = "uv run python -m textual"
     COMMAND = "uv run python"
 
+    COMMAND = "uv run textual keys"
+    # COMMAND = "nano"
+
     # COMMAND = "python test_scroll.py"
 
     class CommandApp(App):

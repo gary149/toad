@@ -1,3 +1,5 @@
+from time import monotonic
+
 from textual.cache import LRUCache
 
 from textual import events
@@ -9,9 +11,12 @@ from textual.scroll_view import ScrollView
 from textual.strip import Strip
 from textual.timer import Timer
 
-from textual import keys
 
 from toad import ansi
+
+
+# Time required to double tab escape
+ESCAPE_TAP_DURATION = 400 / 1000
 
 
 class Terminal(ScrollView, can_focus=True):
@@ -47,6 +52,9 @@ class Terminal(ScrollView, can_focus=True):
 
         self.max_line_width = 0
         self.max_window_width = 0
+        self._escape_time = monotonic()
+        self._escaping = False
+        self._escape_reset_timer: Timer | None = None
 
         self._terminal_render_cache: LRUCache[tuple, Strip] = LRUCache(1024)
 
@@ -109,6 +117,12 @@ class Terminal(ScrollView, can_focus=True):
         scroll_x, scroll_y = self.scroll_offset
         strip = self._render_line(scroll_x, scroll_y + y, self._width)
         return strip
+
+    def on_focus(self) -> None:
+        self.border_subtitle = "Tap [b]esc[/b] [i]twice[/i] to exit"
+
+    def on_blur(self) -> None:
+        self.border_subtitle = "Click to focus"
 
     def _render_line(self, x: int, y: int, width: int) -> Strip:
         selection = self.text_selection
@@ -185,7 +199,34 @@ class Terminal(ScrollView, can_focus=True):
 
         return strip
 
+    def _reset_escaping(self) -> None:
+        if self._escaping:
+            self.write_process_stdin(self.state.key_escape())
+        self._escaping = False
+
     def on_key(self, event: events.Key):
+        event.prevent_default()
+        event.stop()
+        if event.key == "escape":
+            if self._escaping:
+                if monotonic() < self._escape_time + ESCAPE_TAP_DURATION:
+                    self.blur()
+                    self._escaping = False
+                    return
+                else:
+                    self.write_process_stdin(self.state.key_escape())
+            else:
+                self._escaping = True
+                self._escape_time = monotonic()
+                self._escape_reset_timer = self.set_timer(
+                    ESCAPE_TAP_DURATION, self._reset_escaping
+                )
+                return
+        else:
+            self._reset_escaping()
+            if self._escape_reset_timer is not None:
+                self._escape_reset_timer.stop()
+
         if event.key == "enter":
             self.write_process_stdin("\n")
         else:

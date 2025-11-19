@@ -346,35 +346,30 @@ class ANSIParser(StreamParser[ANSIToken]):
 
                     if isinstance(token, PatternToken):
                         value = token.value
-                        print(value)
 
-                        if isinstance(value, CSIPattern.Match):
-                            yield CSI(value.full)
+                        match value:
+                            case CSIPattern.Match():
+                                yield CSI(value.full)
+                            case OSCPattern.Match():
+                                osc_data: list[str] = []
 
-                        elif isinstance(value, OSCPattern.Match):
-                            osc_data: list[str] = []
-
-                            while not isinstance(
-                                token := (yield self.read_regex(r"\x1b\\|\x07")),
-                                MatchToken,
-                            ):
-                                osc_data.append(token.text)
-                            yield OSC("".join(osc_data))
-
-                        elif isinstance(value, DEC):
-                            yield value
-
-                        elif isinstance(value, DECInvoke):
-                            yield value
-
-                        elif isinstance(value, FEPattern.Match):
-                            yield value
+                                while not isinstance(
+                                    token := (yield self.read_regex(r"\x1b\\|\x07")),
+                                    MatchToken,
+                                ):
+                                    osc_data.append(token.text)
+                                yield OSC("".join(osc_data))
+                            case DEC():
+                                yield value
+                            case DECInvoke():
+                                yield value
+                            case FEPattern.Match():
+                                yield value
 
                 else:
                     yield Separator(token.text)
                 continue
 
-            print("CONTENT", token)
             yield ANSIContent(token.text)
 
 
@@ -866,9 +861,7 @@ class ANSIStream:
         Yields:
             `ANSICommand` isntances.
         """
-        print(repr(text))
         for token in self.parser.feed(text):
-            # print("TOKEN", repr(token))
             if isinstance(token, ANSIToken):
                 yield from self.on_token(token)
 
@@ -908,41 +901,41 @@ class ANSIStream:
         """
 
         if match := re.fullmatch(r"\x1b\[(\d+)?(?:;)?(\d*)?(\w)", csi):
-            match match.groups(default=""):
-                case [lines, "", "A"]:
-                    return ANSICursor(delta_y=-int(lines or 1))
-                case [lines, "", "B"]:
-                    return ANSICursor(delta_y=+int(lines or 1))
-                case [cells, "", "C"]:
-                    return ANSICursor(delta_x=+int(cells or 1))
-                case [cells, "", "D"]:
-                    return ANSICursor(delta_x=-int(cells or 1))
-                case [lines, "", "E"]:
-                    return ANSICursor(absolute_x=0, delta_y=+int(lines or 1))
-                case [lines, "", "F"]:
-                    return ANSICursor(absolute_x=0, delta_y=-int(lines or 1))
-                case [cells, "", "G"]:
-                    return ANSICursor(absolute_x=+int(cells or 1) - 1)
+            match match.groups(default="1"):
+                case [lines, _, "A"]:
+                    return ANSICursor(delta_y=-int(lines))
+                case [lines, _, "B"]:
+                    return ANSICursor(delta_y=+int(lines))
+                case [cells, _, "C"]:
+                    return ANSICursor(delta_x=+int(cells))
+                case [cells, _, "D"]:
+                    return ANSICursor(delta_x=-int(cells))
+                case [lines, _, "E"]:
+                    return ANSICursor(absolute_x=0, delta_y=+int(lines))
+                case [lines, _, "F"]:
+                    return ANSICursor(absolute_x=0, delta_y=-int(lines))
+                case [cells, _, "G"]:
+                    return ANSICursor(absolute_x=+int(cells) - 1)
                 case [row, column, "H"]:
                     return ANSICursor(
-                        absolute_x=int(column or 1) - 1,
-                        absolute_y=int(row or 1) - 1,
+                        absolute_x=int(column) - 1,
+                        absolute_y=int(row) - 1,
                     )
-                case [row, "", "d"]:
-                    return ANSICursor(absolute_y=int(row or 1) - 1)
-                case ["0" | "", "", "J"]:
+                case [row, _, "d"]:
+                    return ANSICursor(absolute_y=int(row) - 1)
+                case ["0" | "", _, "J"]:
                     return cls.CLEAR_SCREEN_CURSOR_TO_END
-                case ["1", "", "J"]:
+                case ["1", _, "J"]:
                     return cls.CLEAR_SCREEN_CURSOR_TO_BEGINNING
-                case ["2", "", "J"]:
+                case ["2", _, "J"]:
                     return cls.CLEAR_SCREEN
-                case ["3", "", "J"]:
+                case ["3", _, "J"]:
                     return cls.CLEAR_SCREEN_SCROLLBACK
-                case ["0" | "", "", "K"]:
+                case ["0" | "", _, "K"]:
                     return cls.CLEAR_LINE_CURSOR_TO_END
-                case ["1", "", "K"]:
+                case ["1", _, "K"]:
                     return cls.CLEAR_LINE_CURSOR_TO_BEGINNING
-                case ["2", "", "K"]:
+                case ["2", _, "K"]:
                     return cls.CLEAR_LINE
                 case [top, bottom, "r"]:
                     return ANSIScrollMargin(
@@ -1510,7 +1503,6 @@ class TerminalState:
         Returns:
             A string to be sent to stdin, or `None` if no key was produced.
         """
-        print(self.cursor_keys_application_mode)
         if (
             self.cursor_keys_application_mode
             and (sequence := CURSOR_KEYS_APPLICATION.get(event.key)) is not None
@@ -1522,6 +1514,14 @@ class TerminalState:
         if event.character:
             return event.character
         return None
+
+    def key_escape(self) -> str:
+        """Generate the escape sequence for the escape key.
+
+        Returns:
+            str: ANSI escape sequences.
+        """
+        return "\x1b"
 
     def _reflow(self) -> None:
         buffer = self.buffer
@@ -1585,7 +1585,6 @@ class TerminalState:
         return position
 
     def _handle_ansi_command(self, ansi_command: ANSICommand) -> None:
-        print(ansi_command)
         match ansi_command:
             case ANSIStyle(style):
                 self.style = style
@@ -1617,6 +1616,7 @@ class TerminalState:
                             line.content[:start_replace],
                             content,
                             line.content[end_replace + 1 :],
+                            strip_control_codes=False,
                         )
                         if updated_line.cell_length < self.width:
                             updated_line += Content.styled(
@@ -1631,6 +1631,7 @@ class TerminalState:
                                 line.content[:cursor_line_offset],
                                 content,
                                 line.content[cursor_line_offset + len(content) :],
+                                strip_control_codes=False,
                             )
 
                     self.update_line(buffer, folded_line.line_no, updated_line)

@@ -1,3 +1,4 @@
+from functools import lru_cache
 import io
 import re
 
@@ -155,6 +156,7 @@ class StreamParser[ParseType]:
         """
         return Read(count)
 
+    @lru_cache(1024)
     def read_until(self, *characters: str) -> ReadUntil:
         """Read until the given characters.
 
@@ -164,6 +166,7 @@ class StreamParser[ParseType]:
         """
         return ReadUntil(*characters)
 
+    @lru_cache(1024)
     def read_regex(self, regex: str) -> ReadRegex:
         """Search for the matching regex.
 
