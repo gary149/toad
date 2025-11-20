@@ -22,6 +22,7 @@ from toad._stream_parser import (
     Pattern,
     PatternCheck,
     ParseResult,
+    Token,
 )
 
 from toad.dec import CHARSET_MAP
@@ -40,99 +41,90 @@ def character_range(start: int, end: int) -> frozenset:
     return frozenset(map(chr, range(start, end + 1)))
 
 
-def as_int(text: str) -> int:
-    """Convert a string to an integer, or return `0` if conversion is impossible"""
-    if not text.isdecimal():
-        return 0
-    try:
-        return int(text)
-    except ValueError:
-        return 0
-
-
 class ANSIToken:
     pass
 
 
-@dataclass
-class ANSIContent(ANSIToken):
-    text: str
+# @dataclass
+# class ANSIContent(ANSIToken):
+#     text: str
 
 
-@dataclass
-class Separator(ANSIToken):
-    text: str
+# @dataclass
+# class Separator(ANSIToken):
+#     text: str
 
 
-@dataclass
-class CSI(ANSIToken):
-    text: str
+# @dataclass
+# class CSI(ANSIToken):
+#     text: str
 
 
-@dataclass
-class OSC(ANSIToken):
-    text: str
+# @dataclass
+# class OSC(ANSIToken):
+#     text: str
 
 
-@dataclass
-class DEC(ANSIToken):
+class DEC(NamedTuple):
     slot: int
     character_set: str
 
 
-@dataclass
-class DECInvoke(ANSIToken):
+class DECInvoke(NamedTuple):
     gl: int | None = None
     gr: int | None = None
     shift: int | None = None
 
 
-class CSIPattern(Pattern):
-    """Control Sequence Introducer."""
+# class CSIPattern(Pattern):
+#     """Control Sequence Introducer."""
 
-    PARAMETER_BYTES = character_range(0x30, 0x3F)
-    INTERMEDIATE_BYTES = character_range(0x20, 0x2F)
-    FINAL_BYTE = character_range(0x40, 0x7E)
+#     PARAMETER_BYTES = character_range(0x30, 0x3F)
+#     INTERMEDIATE_BYTES = character_range(0x20, 0x2F)
+#     FINAL_BYTE = character_range(0x40, 0x7E)
 
-    class Match(NamedTuple):
-        parameter: str
-        intermediate: str
-        final: str
+#     class Match(NamedTuple):
+#         parameter: str
+#         intermediate: str
+#         final: str
 
-        @property
-        def full(self) -> str:
-            return f"\x1b[{self.parameter}{self.intermediate}{self.final}"
+#         @property
+#         def full(self) -> str:
+#             return f"\x1b[{self.parameter}{self.intermediate}{self.final}"
 
-    def check(self) -> PatternCheck:
-        """Check a CSI pattern."""
-        if (yield) != "[":
-            return False
+#     def check(self) -> PatternCheck:
+#         """Check a CSI pattern."""
+#         if (yield) != "[":
+#             return False
 
-        parameter = io.StringIO()
-        intermediate = io.StringIO()
-        parameter_bytes = self.PARAMETER_BYTES
+#         parameter = io.StringIO()
+#         intermediate = io.StringIO()
+#         parameter_bytes = self.PARAMETER_BYTES
 
-        while (character := (yield)) in parameter_bytes:
-            parameter.write(character)
+#         while (character := (yield)) in parameter_bytes:
+#             parameter.write(character)
 
-        if character in self.FINAL_BYTE:
-            return self.Match(parameter.getvalue(), "", character)
+#         if character in self.FINAL_BYTE:
+#             return self.Match(parameter.getvalue(), "", character)
 
-        intermediate_bytes = self.INTERMEDIATE_BYTES
-        while True:
-            intermediate.write(character)
-            if (character := (yield)) not in intermediate_bytes:
-                break
+#         intermediate_bytes = self.INTERMEDIATE_BYTES
+#         while True:
+#             intermediate.write(character)
+#             if (character := (yield)) not in intermediate_bytes:
+#                 break
 
-        final_byte = character
-        if final_byte not in self.FINAL_BYTE:
-            return False
+#         final_byte = character
+#         if final_byte not in self.FINAL_BYTE:
+#             return False
 
-        return self.Match(
-            parameter.getvalue(),
-            intermediate.getvalue(),
-            final_byte,
-        )
+#         return self.Match(
+#             parameter.getvalue(),
+#             intermediate.getvalue(),
+#             final_byte,
+#         )
+
+
+DEC_SLOTS = {"(": 0, ")": 1, "*": 2, "+": 3, "-": 1, ".": 2, "//": 3}
 
 
 class DECPattern(Pattern):
@@ -185,12 +177,12 @@ class FEPattern(Pattern):
         sequence: str
 
     def check(self) -> PatternCheck:
-        characters: list[str] = []
-        store = characters.append
+        sequence = io.StringIO()
+        # characters: list[str] = []
+        # store = characters.append
+        store = sequence.write
+        store("\x1b")
         store(character := (yield))
-
-        def build_match() -> FEPattern.Match:
-            return self.Match("".join(characters))
 
         match character:
             # CSI
@@ -198,7 +190,7 @@ class FEPattern(Pattern):
                 while (character := (yield)) not in self.CSI_TERMINATORS:
                     store(character)
                 store(character)
-                return build_match()
+                return ("csi", sequence.getvalue())
 
             # OSC
             case "]":
@@ -209,7 +201,7 @@ class FEPattern(Pattern):
                         break
                     last_character = character
                 store(character)
-                return build_match()
+                return ("osc", sequence.getvalue())
 
             # DCS
             case "P":
@@ -220,44 +212,26 @@ class FEPattern(Pattern):
                         break
                     last_character = character
                 store(character)
-                return build_match()
+                return ("dcs", sequence.getvalue())
 
             # Character set designation
             case "(" | ")" | "*" | "+" | "-" | "." | "//":
                 if (character := (yield)) not in self.FINAL:
                     return False
                 store(character)
-                return build_match()
+                return ("csd", sequence.getvalue())
 
             # Line attribute
             case "#":
-                character = yield
-                store(character)
-                return build_match()
+                store((yield))
+                return ("la", sequence.getvalue())
             # ISO 2022: ESC SP
             case " ":
-                character = yield
-                store(character)
-                return build_match()
+                store((yield))
+                return ("sp", sequence.getvalue())
             case _:
-                return build_match()
-
-        while (character := (yield)) in self.INTERMEDIATE:
-            store(character)
-        if character not in self.FINAL:
-            return False
-        store(character)
-        return build_match()
-
-
-class OSCPattern(Pattern):
-    class Match(NamedTuple):
-        code: str
-
-    def check(self) -> PatternCheck:
-        if (yield) != "]":
-            return False
-        return self.Match("]")
+                return ("?", sequence.getvalue())
+                return False
 
 
 SGR_STYLE_MAP: Mapping[int, Style] = {
@@ -321,10 +295,10 @@ SGR_STYLE_MAP: Mapping[int, Style] = {
 }
 
 
-class ANSIParser(StreamParser[ANSIToken]):
+class ANSIParser(StreamParser[tuple[str, str]]):
     """Parse a stream of text containing escape sequences in to logical tokens."""
 
-    def parse(self) -> ParseResult[ANSIToken]:
+    def parse(self) -> ParseResult[tuple[str, str]]:
         NEW_LINE = "\n"
         CARRIAGE_RETURN = "\r"
         ESCAPE = "\x1b"
@@ -335,42 +309,46 @@ class ANSIParser(StreamParser[ANSIToken]):
 
             if isinstance(token, SeparatorToken):
                 if token.text == ESCAPE:
-                    token = yield self.read_patterns(
-                        "\x1b",
-                        csi=CSIPattern(),
-                        osc=OSCPattern(),
-                        dec=DECPattern(),
-                        dec_invoke=DECInvokePattern(),
-                        fe=FEPattern(),
-                    )
+                    token = yield self.read_patterns("\x1b", fe=FEPattern())
 
                     if isinstance(token, PatternToken):
-                        value = token.value
+                        token_type, _ = token.value
 
-                        match value:
-                            case CSIPattern.Match():
-                                yield CSI(value.full)
-                            case OSCPattern.Match():
-                                osc_data: list[str] = []
+                        if token_type == "osc":
+                            osc_data = io.StringIO()
+                            while not isinstance(
+                                token := (yield self.read_regex(r"\x1b\\|\x07")),
+                                MatchToken,
+                            ):
+                                osc_data.write(token.text)
+                            yield "osc", osc_data.getvalue()
+                        else:
+                            yield token.value
 
-                                while not isinstance(
-                                    token := (yield self.read_regex(r"\x1b\\|\x07")),
-                                    MatchToken,
-                                ):
-                                    osc_data.append(token.text)
-                                yield OSC("".join(osc_data))
-                            case DEC():
-                                yield value
-                            case DECInvoke():
-                                yield value
-                            case FEPattern.Match():
-                                yield value
+                        # match value:
+                        #     case CSIPattern.Match():
+                        #         yield CSI(value.full)
+                        #     case OSCPattern.Match():
+                        #         osc_data: list[str] = []
+
+                        #         while not isinstance(
+                        #             token := (yield self.read_regex(r"\x1b\\|\x07")),
+                        #             MatchToken,
+                        #         ):
+                        #             osc_data.append(token.text)
+                        #         yield OSC("".join(osc_data))
+                        #     case DEC():
+                        #         yield value
+                        #     case DECInvoke():
+                        #         yield value
+                        #     case FEPattern.Match():
+                        #         yield value
 
                 else:
-                    yield Separator(token.text)
+                    yield "separator", token.text
                 continue
 
-            yield ANSIContent(token.text)
+            yield "content", token.text
 
 
 EMPTY_LINE = Content()
@@ -664,6 +642,7 @@ class ANSICursor(NamedTuple):
     """New text"""
     replace: tuple[int | None, int | None] | None = None
     """Replace range (slice like)."""
+    relative: bool = False
 
     def __rich_repr__(self) -> rich.repr.Result:
         yield "delta_x", self.delta_x, None
@@ -688,7 +667,14 @@ class ANSICursor(NamedTuple):
             replace_start = line_length + replace_start
         if replace_end < 0:
             replace_end = line_length + replace_end
-        return (replace_start, replace_end)
+        if self.relative:
+            return (cursor_offset + replace_start, cursor_offset + replace_end)
+        else:
+            return (replace_start, replace_end)
+
+
+class ANSINewLine:
+    pass
 
 
 @rich.repr.auto
@@ -712,16 +698,6 @@ class ANSIClear(NamedTuple):
 
 
 @rich.repr.auto
-class ANSICursorShow(NamedTuple):
-    """Toggle visibility of the cursor."""
-
-    show: bool
-
-    def __rich_repr__(self) -> rich.repr.Result:
-        yield self.show
-
-
-@rich.repr.auto
 class ANSIScrollMargin(NamedTuple):
     top: int | None = None
     bottom: int | None = None
@@ -732,43 +708,36 @@ class ANSIScrollMargin(NamedTuple):
 
 
 @rich.repr.auto
-class ANSIAlternateScreen(NamedTuple):
-    """Toggle the alternate buffer."""
-
-    enable: bool
-
-    def __rich_repr__(self) -> rich.repr.Result:
-        yield self.enable
-
-
-@rich.repr.auto
-class ANSIBracketedPaste(NamedTuple):
-    """Toggle the alternate buffer."""
-
-    enable: bool
+class ANSIScroll(NamedTuple):
+    direction: Literal[+1, -1]
+    lines: int
 
     def __rich_repr__(self) -> rich.repr.Result:
-        yield self.enable
+        yield self.direction
+        yield self.lines
 
 
-@rich.repr.auto
-class ANSICursorBlink(NamedTuple):
-    """Toggle the alternate buffer."""
+class ANSIFeatures(NamedTuple):
+    """Terminal feature flags."""
 
-    enable: bool
+    show_cursor: bool | None = None
+    alternate_screen: bool | None = None
+    bracketed_paste: bool | None = None
+    cursor_blink: bool | None = None
+    cursor_keys: bool | None = None
+    replace_mode: bool | None = None
+    auto_wrap: bool | None = None
 
-    def __rich_repr__(self) -> rich.repr.Result:
-        yield self.enable
+
+MOUSE_TRACKING_MODES = Literal["none", "button", "drag", "all"]
+MOUSE_FORMAT = Literal["normal", "utf8", "sgr", "urxvt"]
 
 
-@rich.repr.auto
-class ANSICursorKeysApplicationMode(NamedTuple):
-    """Toggle the alternate buffer."""
-
-    enable: bool
-
-    def __rich_repr__(self) -> rich.repr.Result:
-        yield self.enable
+class ANSIMouseTracking(NamedTuple):
+    tracking: MOUSE_TRACKING_MODES | None = None
+    format: MOUSE_FORMAT | None = None
+    focus_events: bool | None = None
+    alternate_scroll: bool | None = None
 
 
 # Not technically part of the terminal protocol
@@ -793,15 +762,14 @@ class ANSICharacterSet(NamedTuple):
 type ANSICommand = (
     ANSIStyle
     | ANSICursor
+    | ANSINewLine
     | ANSIClear
-    | ANSICursorShow
     | ANSIScrollMargin
-    | ANSIAlternateScreen
+    | ANSIScroll
     | ANSIWorkingDirectory
     | ANSICharacterSet
-    | ANSIBracketedPaste
-    | ANSICursorBlink
-    | ANSICursorKeysApplicationMode
+    | ANSIFeatures
+    | ANSIMouseTracking
 )
 
 
@@ -862,7 +830,7 @@ class ANSIStream:
             `ANSICommand` isntances.
         """
         for token in self.parser.feed(text):
-            if isinstance(token, ANSIToken):
+            if not isinstance(token, Token):
                 yield from self.on_token(token)
 
     ANSI_SEPARATORS = {
@@ -877,16 +845,38 @@ class ANSIStream:
     CLEAR_SCREEN_CURSOR_TO_BEGINNING = ANSIClear("cursor_to_beginning")
     CLEAR_SCREEN = ANSIClear("screen")
     CLEAR_SCREEN_SCROLLBACK = ANSIClear("scrollback")
-    SHOW_CURSOR = ANSICursorShow(True)
-    HIDE_CURSOR = ANSICursorShow(False)
-    ENABLE_ALTERNATE_SCREEN = ANSIAlternateScreen(True)
-    DISABLE_ALTERNATE_SCREEN = ANSIAlternateScreen(False)
-    ENABLE_BRACKETED_PASTE = ANSIBracketedPaste(True)
-    DISABLE_BRACKETED_PASTE = ANSIBracketedPaste(False)
-    ENABLE_CURSOR_BLINK = ANSICursorBlink(True)
-    DISABLE_CURSOR_BLINK = ANSICursorBlink(False)
-    ENABLE_CURSOR_KEYS_APPLICATION_MODE = ANSICursorKeysApplicationMode(True)
-    DISABLE_CURSOR_KEYS_APPLICATION_MODE = ANSICursorKeysApplicationMode(False)
+    SHOW_CURSOR = ANSIFeatures(show_cursor=True)
+    HIDE_CURSOR = ANSIFeatures(show_cursor=False)
+    ENABLE_ALTERNATE_SCREEN = ANSIFeatures(alternate_screen=True)
+    DISABLE_ALTERNATE_SCREEN = ANSIFeatures(alternate_screen=False)
+    ENABLE_BRACKETED_PASTE = ANSIFeatures(bracketed_paste=True)
+    DISABLE_BRACKETED_PASTE = ANSIFeatures(bracketed_paste=False)
+    ENABLE_CURSOR_BLINK = ANSIFeatures(cursor_blink=True)
+    DISABLE_CURSOR_BLINK = ANSIFeatures(cursor_blink=False)
+    ENABLE_CURSOR_KEYS_APPLICATION_MODE = ANSIFeatures(cursor_keys=True)
+    DISABLE_CURSOR_KEYS_APPLICATION_MODE = ANSIFeatures(cursor_keys=False)
+    ENABLE_REPLACE_MODE = ANSIFeatures(replace_mode=True)
+    DISABLE_REPLACE_MODE = ANSIFeatures(replace_mode=False)
+    ENABLE_AUTO_WRAP = ANSIFeatures(auto_wrap=True)
+    DISABLE_AUTO_WRAP = ANSIFeatures(auto_wrap=False)
+
+    INVOKE_G2_INTO_GL = DECInvoke(gl=2)
+    INVOKE_G3_INTO_GL = DECInvoke(gl=3)
+    INVOKE_G1_INTO_GR = DECInvoke(gr=1)
+    INVOKE_G2_INTO_GR = DECInvoke(gr=2)
+    INVOKE_G3_INTO_GR = DECInvoke(gr=3)
+    SHIFT_G2 = DECInvoke(shift=2)
+    SHIFT_G3 = DECInvoke(shift=3)
+
+    DEC_INVOKE_MAP = {
+        "n": INVOKE_G2_INTO_GL,
+        "o": INVOKE_G3_INTO_GL,
+        "~": INVOKE_G1_INTO_GR,
+        "}": INVOKE_G2_INTO_GR,
+        "|": INVOKE_G3_INTO_GR,
+        "N": SHIFT_G2,
+        "O": SHIFT_G3,
+    }
 
     @classmethod
     @lru_cache(maxsize=1024)
@@ -899,30 +889,46 @@ class ANSIStream:
         Returns:
             Ansi segment, or `None` if one couldn't be decoded.
         """
-
+        print(repr(csi))
         if match := re.fullmatch(r"\x1b\[(\d+)?(?:;)?(\d*)?(\w)", csi):
             match match.groups(default="1"):
                 case [lines, _, "A"]:
-                    return ANSICursor(delta_y=-int(lines))
+                    return ANSICursor(delta_y=-int(lines or 1))
                 case [lines, _, "B"]:
-                    return ANSICursor(delta_y=+int(lines))
+                    return ANSICursor(delta_y=+int(lines or 1))
                 case [cells, _, "C"]:
-                    return ANSICursor(delta_x=+int(cells))
+                    return ANSICursor(delta_x=+int(cells or 1))
                 case [cells, _, "D"]:
-                    return ANSICursor(delta_x=-int(cells))
+                    return ANSICursor(delta_x=-int(cells or 1))
                 case [lines, _, "E"]:
-                    return ANSICursor(absolute_x=0, delta_y=+int(lines))
+                    return ANSICursor(absolute_x=0, delta_y=+int(lines or 1))
                 case [lines, _, "F"]:
-                    return ANSICursor(absolute_x=0, delta_y=-int(lines))
+                    return ANSICursor(absolute_x=0, delta_y=-int(lines or 1))
                 case [cells, _, "G"]:
-                    return ANSICursor(absolute_x=+int(cells) - 1)
+                    return ANSICursor(absolute_x=+int(cells or 1) - 1)
                 case [row, column, "H"]:
                     return ANSICursor(
-                        absolute_x=int(column) - 1,
-                        absolute_y=int(row) - 1,
+                        absolute_x=int(column or 1) - 1,
+                        absolute_y=int(row or 1) - 1,
                     )
+                case [characters, _, "P"]:
+                    return ANSICursor(
+                        replace=(None, int(characters or 1)), relative=True, text=""
+                    )
+                case [lines, _, "S"]:
+                    return ANSIScroll(-1, int(lines))
+                case [lines, _, "T"]:
+                    return ANSIScroll(+1, int(lines))
+
                 case [row, _, "d"]:
-                    return ANSICursor(absolute_y=int(row) - 1)
+                    return ANSICursor(absolute_y=int(row or 1) - 1)
+                case [characters, _, "X"]:
+                    character_count = int(characters or 1)
+                    return ANSICursor(
+                        replace=(None, int(character_count)),
+                        relative=True,
+                        text=" " * character_count,
+                    )
                 case ["0" | "", _, "J"]:
                     return cls.CLEAR_SCREEN_CURSOR_TO_END
                 case ["1", _, "J"]:
@@ -939,11 +945,20 @@ class ANSIStream:
                     return cls.CLEAR_LINE
                 case [top, bottom, "r"]:
                     return ANSIScrollMargin(
-                        int(top) if top else None, int(bottom) if bottom else None
+                        int(top or 1) if top else None,
+                        int(bottom or 1) if bottom else None,
                     )
+                case ["4", _, "h" | "l" as replace_mode]:
+                    return (
+                        cls.ENABLE_REPLACE_MODE
+                        if replace_mode == "h"
+                        else cls.DISABLE_REPLACE_MODE
+                    )
+
                 case _:
                     print("Unknown CSI (a)", repr(csi))
                     return None
+
         elif match := re.fullmatch(r"\x1b\[([0-9:;<=>?]*)([!-/]*)([@-~])", csi):
             match match.groups(default=""):
                 case ["?25", "", "h"]:
@@ -966,26 +981,68 @@ class ANSIStream:
                     return cls.ENABLE_CURSOR_KEYS_APPLICATION_MODE
                 case ["?1", "", "l"]:
                     return cls.DISABLE_CURSOR_KEYS_APPLICATION_MODE
-                case _:
-                    print("Unknown CSI (b)", repr(csi))
+                case ["?7", "", "h"]:
+                    return cls.ENABLE_AUTO_WRAP
+                case ["?7", "", "l"]:
+                    return cls.DISABLE_AUTO_WRAP
+
+                # \x1b[22;0;0t
+                case [param1, param2, "t"]:
+                    # 't' = XTWINOPS (Window manipulation)
                     return None
+                case _:
+                    if match := re.fullmatch(r"\x1b\[\?([0-9;]+)([hl])", csi):
+                        modes = [m for m in match.group(1).split(";")]
+                        enable = match.group(2) == "h"
+                        tracking: MOUSE_TRACKING_MODES | None = None
+                        format: MOUSE_FORMAT | None = None
+                        focus_events: bool | None = None
+                        alternate_scroll: bool | None = None
+                        for mode in modes:
+                            if mode == "1000":
+                                tracking = "button" if enable else "none"
+                            elif mode == "1002":
+                                tracking = "drag" if enable else "none"
+                            elif mode == "1003":
+                                tracking = "all" if enable else "none"
+                            elif mode == "1006":
+                                format = "sgr"
+                            elif mode == "1015":
+                                format = "urxvt"
+                            elif mode == "1004":
+                                focus_events = enable
+                            elif mode == "1007":
+                                alternate_scroll = enable
+                        return ANSIMouseTracking(
+                            tracking=tracking,
+                            format=format,
+                            focus_events=focus_events,
+                            alternate_scroll=alternate_scroll,
+                        )
+                    else:
+                        print("Unknown CSI (b)", repr(csi))
+                        return None
+
         print("Unknown CSI (c)", repr(csi))
         return None
 
-    def on_token(self, token: ANSIToken) -> Iterable[ANSICommand]:
+    def on_token(self, token: tuple[str, str]) -> Iterable[ANSICommand]:
         match token:
-            case Separator(separator):
-                yield self.ANSI_SEPARATORS[separator]
+            case ["separator", separator]:
+                if separator == "\n":
+                    yield ANSINewLine()
+                else:
+                    yield self.ANSI_SEPARATORS[separator]
 
-            case OSC(osc):
-                match osc.split(";"):
+            case ["osc", osc]:
+                match osc[1:].split(";"):
                     case ["8", *_, link]:
                         self.style += Style(link=link or None)
                     case ["2025", current_directory, *_]:
                         self.current_directory = current_directory
                         yield ANSIWorkingDirectory(current_directory)
 
-            case CSI(csi):
+            case ["csi", csi]:
                 if csi.endswith("m"):
                     if (sgr_style := self._parse_sgr(csi[2:-1])) is None:
                         self.style = NULL_STYLE
@@ -994,15 +1051,17 @@ class ANSIStream:
                     yield ANSIStyle(self.style)
                 else:
                     if (ansi_segment := self._parse_csi(csi)) is not None:
+                        print(repr(ansi_segment))
                         yield ansi_segment
 
-            case DEC():
-                yield ANSICharacterSet(dec=token)
+            case ["dec", dec]:
+                slot, character_set = list(dec)
+                yield ANSICharacterSet(DEC(DEC_SLOTS[slot], character_set))
 
-            case DECInvoke():
-                yield ANSICharacterSet(dec_invoke=token)
+            case ["dev_invoke", dec_invoke]:
+                yield ANSICharacterSet(dec_invoke=self.DEC_INVOKE_MAP[dec_invoke[0]])
 
-            case ANSIContent(text):
+            case ["content", text]:
                 yield ANSICursor(delta_x=len(text), text=text)
 
 
@@ -1135,42 +1194,15 @@ class DECState:
         return f"{first_character}{text}"
 
 
-def _build_textual_keys() -> dict[str, str]:
-    """Build a mapping of Textual key identifiers to ANSI sequences."""
+@dataclass
+class MouseTracking:
+    """The mouse tracking state."""
 
-    textual_keys: dict[str, str] = {}
-    for sequence, mapped_keys in ANSI_SEQUENCES_KEYS.items():
-        if not sequence or sequence.isprintable():
-            continue
+    tracking: MOUSE_TRACKING_MODES = "none"
+    format: MOUSE_FORMAT = "normal"
+    focus_events: bool = False
+    alternate_scroll: bool = False
 
-        key: Keys | None = None
-        if isinstance(mapped_keys, tuple):
-            if len(mapped_keys) != 1:
-                continue
-            potential_key = mapped_keys[0]
-            if isinstance(potential_key, Keys):
-                key = potential_key
-        elif isinstance(mapped_keys, Keys):
-            key = mapped_keys
-
-        if key is None:
-            continue
-
-        textual_keys.setdefault(key.value, sequence)
-
-    return textual_keys
-
-
-# # Should map Textual key identifiers on to ansi escape sequences for that key
-# # Only non-printable characters should exist here.
-# TEXTUAL_KEYS: dict[str, str] = _build_textual_keys()
-
-# TERMINAL_KEY_MAP: dict[str, str] = {**TEXTUAL_KEYS, "enter": "\n"}
-
-# print(TERMINAL_KEY_MAP)
-
-# ANSI escape sequences for non-printable keys and modified keys
-# Format: Textual key identifier → ANSI escape sequence
 
 TERMINAL_KEY_MAP = {
     # ============================================================================
@@ -1447,8 +1479,12 @@ class TerminalState:
         """Is bracketed pase enabled?"""
         self.cursor_blink = False
         """Should the cursor blink?"""
-        self.cursor_keys_application_mode = False
+        self.cursor_keys = False
         """Is cursor keys application mode enabled?"""
+        self.replace_mode = True
+        """Should content replaces characters (`True`) or insert (`False`)?"""
+        self.auto_wrap = True
+        """Should content wrap?"""
 
         self.current_directory: str = ""
         """Current working directory."""
@@ -1458,8 +1494,14 @@ class TerminalState:
         self.alternate_buffer = Buffer()
         """Alternate buffer lines."""
 
+        self.scroll_margin_top: int | None = None
+        self.scroll_margin_bottom: int | None = None
+
         self.dec_state = DECState()
         """The DEC (character set) state."""
+
+        self.mouse_tracking_state = MouseTracking()
+        """The mouse tracking state."""
 
         self._updates: int = 0
 
@@ -1504,7 +1546,7 @@ class TerminalState:
             A string to be sent to stdin, or `None` if no key was produced.
         """
         if (
-            self.cursor_keys_application_mode
+            self.cursor_keys
             and (sequence := CURSOR_KEYS_APPLICATION.get(event.key)) is not None
         ):
             return sequence
@@ -1585,6 +1627,13 @@ class TerminalState:
         return position
 
     def _handle_ansi_command(self, ansi_command: ANSICommand) -> None:
+        if isinstance(ansi_command, ANSINewLine):
+            if self.alternate_screen:
+                # New line behaves differently in alternate screen
+                ansi_command = ANSICursor(delta_y=+1)
+            else:
+                ansi_command = ANSICursor(delta_y=+1, absolute_x=0)
+
         match ansi_command:
             case ANSIStyle(style):
                 self.style = style
@@ -1593,14 +1642,18 @@ class TerminalState:
                 folded_lines = buffer.folded_lines
                 if buffer.cursor_line >= len(folded_lines):
                     while buffer.cursor_line >= len(folded_lines):
-                        self.add_line(buffer, Content())
+                        self.add_line(buffer, EMPTY_LINE)
 
                 folded_line = folded_lines[buffer.cursor_line]
                 previous_content = folded_line.content
                 line = buffer.lines[folded_line.line_no]
 
                 if text is not None:
-                    content = Content.styled(self.dec_state.translate(text), self.style)
+                    content = Content.styled(
+                        self.dec_state.translate(text),
+                        self.style,
+                        strip_control_codes=False,
+                    )
                     cursor_line_offset = self.get_cursor_line_offset(buffer)
 
                     if cursor_line_offset > len(line.content):
@@ -1619,20 +1672,31 @@ class TerminalState:
                             strip_control_codes=False,
                         )
                         if updated_line.cell_length < self.width:
+                            blank_width = self.width - updated_line.cell_length
                             updated_line += Content.styled(
-                                " " * (self.width - updated_line.cell_length),
+                                " " * blank_width,
                                 self.style,
+                                blank_width,
+                                strip_control_codes=False,
                             )
                     else:
                         if cursor_line_offset == len(line.content):
                             updated_line = line.content + content
                         else:
-                            updated_line = Content.assemble(
-                                line.content[:cursor_line_offset],
-                                content,
-                                line.content[cursor_line_offset + len(content) :],
-                                strip_control_codes=False,
-                            )
+                            if self.replace_mode:
+                                updated_line = Content.assemble(
+                                    line.content[:cursor_line_offset],
+                                    content,
+                                    line.content[cursor_line_offset + len(content) :],
+                                    strip_control_codes=False,
+                                )
+                            else:
+                                updated_line = Content.assemble(
+                                    line.content[:cursor_line_offset],
+                                    content,
+                                    line.content[cursor_line_offset:],
+                                    strip_control_codes=False,
+                                )
 
                     self.update_line(buffer, folded_line.line_no, updated_line)
                     if not previous_content.is_same(folded_line.content):
@@ -1653,17 +1717,34 @@ class TerminalState:
                     buffer.cursor_line = max(0, absolute_y)
 
                 if current_cursor_line != buffer.cursor_line:
+                    # Simplify when the cursor moves away from the current line
                     line.content.simplify()  # Reduce segments
                     self._line_updated(buffer, current_cursor_line)
                     self._line_updated(buffer, buffer.cursor_line)
 
-            case ANSICursorShow(show_cursor):
-                self.show_cursor = show_cursor
+            case ANSIFeatures() as features:
+                if features.show_cursor is not None:
+                    self.show_cursor = features.show_cursor
+                if features.alternate_screen is not None:
+                    self.alternate_screen = features.alternate_screen
+                if features.bracketed_paste is not None:
+                    self.bracketed_paste = features.bracketed_paste
+                if features.cursor_blink is not None:
+                    self.cursor_blink = features.cursor_blink
+                if features.cursor_keys is not None:
+                    self.cursor_keys = features.cursor_keys
+                if features.auto_wrap is not None:
+                    self.auto_wrap = features.auto_wrap
 
-            case ANSIAlternateScreen(alternate_buffer):
-                self.alternate_screen = alternate_buffer
-                while len(self.alternate_buffer.lines) < self.height:
-                    self.add_line(self.alternate_buffer, EMPTY_LINE)
+            case ANSIScrollMargin(top, bottom):
+                if top is not None:
+                    self.scroll_margin_top = top
+                if bottom is not None:
+                    self.scroll_margin_bottom = bottom
+
+            case ANSIScroll(direction, lines):
+                # TODO
+                pass
 
             case ANSICharacterSet(dec, dec_invoke):
                 self.dec_state.update(dec, dec_invoke)
@@ -1672,14 +1753,16 @@ class TerminalState:
                 self.current_directory = path
                 # self.finalize()
 
-            case ANSIBracketedPaste(bracketed_paste):
-                self.bracketed_paste = bracketed_paste
-
-            case ANSICursorBlink(cursor_blink):
-                self.cursor_blink = cursor_blink
-
-            case ANSICursorKeysApplicationMode(cursor_keys_application_mode):
-                self.cursor_keys_application_mode = cursor_keys_application_mode
+            case ANSIMouseTracking(tracking, format, focus_events, alternate_scroll):
+                mouse_tracking_state = self.mouse_tracking_state
+                if tracking is not None:
+                    mouse_tracking_state.tracking = tracking
+                if format is not None:
+                    mouse_tracking_state.format = format
+                if focus_events is not None:
+                    mouse_tracking_state.focus_events = focus_events
+                if alternate_scroll is not None:
+                    mouse_tracking_state.alternate_scroll = alternate_scroll
 
             case _:
                 print("Unhandled", ansi_command)
@@ -1697,6 +1780,8 @@ class TerminalState:
             pass
 
     def _fold_line(self, line_no: int, line: Content, width: int) -> list[LineFold]:
+        if not self.auto_wrap:
+            return [LineFold(line_no, 0, 0, line)]
         updates = self.advance_updates()
         if not width:
             return [LineFold(0, 0, 0, line, updates)]
@@ -1731,7 +1816,7 @@ class TerminalState:
 
     def update_line(self, buffer: Buffer, line_index: int, line: Content) -> None:
         while line_index >= len(buffer.lines):
-            self.add_line(buffer, Content())
+            self.add_line(buffer, EMPTY_LINE)
 
         updates = self.advance_updates()
 

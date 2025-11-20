@@ -4,24 +4,27 @@ import re
 
 import rich.repr
 
-from typing import Generator, Iterable
+from typing import Callable, Generator, Iterable
 
+type TokenMatch = tuple[str, str]
 
 type ParseResult[ParseType] = Generator[StreamRead | ParseType, Token, None]
-type PatternCheck = Generator[None, str, object | None]
+type PatternCheck = Generator[None, str, TokenMatch | bool | None]
 
 
 @rich.repr.auto
 class Pattern[ValueType]:
     def __init__(self) -> None:
-        self._generator = self.check()
-        next(self._generator)
+        self._send: Callable[[str], None] | None = None
         self.value: ValueType | None = None
 
-    def feed(self, text: str) -> bool | None:
+    def feed(self, character: str) -> bool | TokenMatch | None:
+        if self._send is None:
+            generator = self.check()
+            self._send = generator.send
+            next(generator)
         try:
-            for character in text:
-                self._generator.send(character)
+            self._send(character)
         except StopIteration as stop_iteration:
             return stop_iteration.value
         else:
@@ -87,7 +90,7 @@ class ReadPatterns[ResultType](StreamRead[ResultType]):
     def is_exhausted(self) -> bool:
         return not self.patterns
 
-    def feed(self, text: str) -> tuple[int, tuple[str, object] | None]:
+    def feed(self, text: str) -> tuple[int, TokenMatch | None]:
         consumed = 0
         for consumed, character in enumerate(text, 1):
             items = list(self.patterns.items())
@@ -131,7 +134,7 @@ class EOFToken(Token):
 
 
 class PatternToken(Token):
-    def __init__(self, name: str, value: object) -> None:
+    def __init__(self, name: str, value: TokenMatch) -> None:
         self.name = name
         self.value = value
         super().__init__("")

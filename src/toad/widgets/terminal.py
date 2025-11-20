@@ -47,7 +47,6 @@ class Terminal(ScrollView, can_focus=True):
         )
         self.minimum_terminal_width = minimum_terminal_width
         self.state = ansi.TerminalState()
-        self._update_timer: Timer | None = None
         self._width: int = 80
 
         self.max_line_width = 0
@@ -101,8 +100,6 @@ class Terminal(ScrollView, can_focus=True):
     def write(self, text: str) -> None:
         self.state.write(text)
         self._update_from_state()
-        # if self._update_timer is None:
-        #     self._update_timer = self.set_timer(1 / 60, self._update_from_state)
 
     def _update_from_state(self) -> None:
         width = self.state.width
@@ -110,7 +107,6 @@ class Terminal(ScrollView, can_focus=True):
         self.virtual_size = Size(min(self.state.buffer.max_line_width, width), height)
         if self._anchored and not self._anchor_released:
             self.scroll_y = self.max_scroll_y
-        self._update_timer = None
         self.refresh()
 
     def render_line(self, y: int) -> Strip:

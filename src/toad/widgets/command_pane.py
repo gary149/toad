@@ -51,9 +51,6 @@ class CommandPane(Terminal):
         flags = fcntl.fcntl(master, fcntl.F_GETFL)
         fcntl.fcntl(master, fcntl.F_SETFL, flags | os.O_NONBLOCK)
 
-        size = struct.pack("HHHH", height, width, 0, 0)
-        fcntl.ioctl(master, termios.TIOCSWINSZ, size)
-
         # Get terminal attributes
         attrs = termios.tcgetattr(slave)
 
@@ -86,6 +83,9 @@ class CommandPane(Terminal):
 
         os.close(slave)
 
+        size = struct.pack("HHHH", height, width, 0, 0)
+        fcntl.ioctl(master, termios.TIOCSWINSZ, size)
+
         BUFFER_SIZE = 64 * 1024
         reader = asyncio.StreamReader(BUFFER_SIZE)
         protocol = asyncio.StreamReaderProtocol(reader)
@@ -103,11 +103,14 @@ class CommandPane(Terminal):
         )
         unicode_decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
 
+        from textual._profile import timer
+
         try:
             while True:
                 data = await shell_read(reader, BUFFER_SIZE)
                 if line := unicode_decoder.decode(data, final=not data):
-                    self.write(line)
+                    with timer("write"):
+                        self.write(line)
                 if not data:
                     break
         finally:
@@ -136,9 +139,7 @@ if __name__ == "__main__":
     COMMAND = "uv run python"
 
     COMMAND = "uv run textual keys"
-    # COMMAND = "nano"
-
-    # COMMAND = "python test_scroll.py"
+    COMMAND = "htop"
 
     class CommandApp(App):
         CSS = """
