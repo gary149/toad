@@ -139,7 +139,9 @@ if __name__ == "__main__":
     COMMAND = "uv run python"
 
     COMMAND = "uv run textual keys"
-    COMMAND = "htop"
+    COMMAND = "uv run python test_scroll1.py"
+
+    # COMMAND = "uv run python test_scroll_region.py"
 
     class CommandApp(App):
         CSS = """

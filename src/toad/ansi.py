@@ -891,7 +891,7 @@ class ANSIStream:
         """
         print(repr(csi))
         if match := re.fullmatch(r"\x1b\[(\d+)?(?:;)?(\d*)?(\w)", csi):
-            match match.groups(default="1"):
+            match match.groups():
                 case [lines, _, "A"]:
                     return ANSICursor(delta_y=-int(lines or 1))
                 case [lines, _, "B"]:
@@ -1147,6 +1147,15 @@ class Buffer:
             position += len(folded_line.content)
 
         return (line_no, position)
+
+    def clear(self, updates: int) -> None:
+        del self.lines[:]
+        del self.line_to_fold[:]
+        del self.folded_lines[:]
+        self.cursor_line = 0
+        self.cursor_offset = 0
+        self.max_line_width = 0
+        self.updates = updates
 
 
 @dataclass
@@ -1457,6 +1466,7 @@ CURSOR_KEYS_APPLICATION = {
 }
 
 
+@rich.repr.auto
 class TerminalState:
     """Abstract terminal state (no renderer)."""
 
@@ -1504,6 +1514,24 @@ class TerminalState:
         """The mouse tracking state."""
 
         self._updates: int = 0
+
+    def __rich_repr__(self) -> rich.repr.Result:
+        yield "width", self.width
+        yield "height", self.height
+        yield "style", self.style, Style()
+        yield "show_cursor", self.show_cursor, True
+        yield "alternate_screen", self.alternate_screen, False
+        yield "bracketed_paste", self.bracketed_paste, False
+        yield "cursor_blink", self.cursor_blink, False
+        yield "replace_mode", self.replace_mode, True
+        yield (
+            "auto_wrap",
+            self.auto_wrap,
+            True,
+        )
+        yield "scroll_margin_top", self.scroll_margin_top, None
+        yield "scroll_margin_bottom", self.scroll_margin_bottom, None
+        yield "dec_state", self.dec_state
 
     @property
     def buffer(self) -> Buffer:
@@ -1626,6 +1654,76 @@ class TerminalState:
             position += len(folded_line.content)
         return position
 
+    def clear_buffer(self, clear: ClearType) -> None:
+        print("CLEAR", clear)
+        buffer = self.buffer
+        line_count = len(buffer.lines)
+        height = min(line_count, self.height)
+        if clear == "screen":
+            buffer.clear(self.advance_updates())
+            # del buffer.lines[:]
+            # del buffer.folded_lines[:]
+            # self._updates += 1
+            # for line_no in range(line_count - height, line_count):
+            #     self.update_line(buffer, line_no, EMPTY_LINE)
+
+    def scroll_buffer(self, direction: int, lines: int) -> None:
+        """Scroll the buffer.
+
+        Args:
+            direction: +1 for down, -1 for up.
+            lines: Number of lines.
+        """
+        # from textual import log
+
+        buffer = self.buffer
+
+        line_count = len(buffer.lines)
+        height = min(line_count, self.height)
+        margin_top = (
+            0 if self.scroll_margin_top is None else (self.scroll_margin_top - 1)
+        )
+        margin_bottom = (
+            0 if self.scroll_margin_bottom is None else (self.scroll_margin_bottom - 1)
+        )
+
+        print("MARGIN_TOP", margin_top)
+        print("MARGIN_BOTTOM", margin_bottom)
+
+        line_start = line_count - height + margin_top
+        line_end = line_count
+
+        print("DIRECTION", direction)
+        print("LINES:", lines)
+        print(line_start)
+        print(line_end)
+
+        if direction == -1:
+            # up
+            for line_no in range(line_start, line_end - margin_bottom + 1):
+                copy_line_no = line_no + lines
+                if line_no > line_end - margin_bottom - lines:
+                    copy_line = EMPTY_LINE
+                else:
+                    try:
+                        copy_line = buffer.lines[copy_line_no].content
+                    except IndexError:
+                        copy_line = EMPTY_LINE
+                self.update_line(buffer, line_no, copy_line)
+
+        else:
+            # down
+            # for _ in range(lines):
+            #    self.add_line(buffer, EMPTY_LINE)
+            for line_no in reversed(
+                range(line_start + lines, line_end - margin_bottom + 1)
+            ):
+                copy_line_no = line_no - lines
+                copy_line = buffer.lines[copy_line_no].content
+                self.update_line(buffer, line_no, copy_line)
+            for line_no in range(line_start, line_start + lines):
+                self.update_line(buffer, line_no, EMPTY_LINE)
+
     def _handle_ansi_command(self, ansi_command: ANSICommand) -> None:
         if isinstance(ansi_command, ANSINewLine):
             if self.alternate_screen:
@@ -1633,6 +1731,7 @@ class TerminalState:
                 ansi_command = ANSICursor(delta_y=+1)
             else:
                 ansi_command = ANSICursor(delta_y=+1, absolute_x=0)
+        print(ansi_command)
 
         match ansi_command:
             case ANSIStyle(style):
@@ -1736,15 +1835,22 @@ class TerminalState:
                 if features.auto_wrap is not None:
                     self.auto_wrap = features.auto_wrap
 
+            case ANSIClear(clear):
+                self.clear_buffer(clear)
+
             case ANSIScrollMargin(top, bottom):
-                if top is not None:
-                    self.scroll_margin_top = top
-                if bottom is not None:
-                    self.scroll_margin_bottom = bottom
+                print("SCROLL REGION", top, bottom)
+                self.scroll_margin_top = top
+                self.scroll_margin_bottom = bottom
+                # Setting the scroll margins moves the cursor to (1, 1)
+                buffer = self.buffer
+                self._line_updated(buffer, buffer.cursor_line)
+                buffer.cursor_line = 0
+                buffer.cursor_offset = 0
+                self._line_updated(buffer, buffer.cursor_line)
 
             case ANSIScroll(direction, lines):
-                # TODO
-                pass
+                self.scroll_buffer(direction, lines)
 
             case ANSICharacterSet(dec, dec_invoke):
                 self.dec_state.update(dec, dec_invoke)
@@ -1766,6 +1872,9 @@ class TerminalState:
 
             case _:
                 print("Unhandled", ansi_command)
+        from textual import log
+
+        log(self)
 
     def _line_updated(self, buffer: Buffer, line_no: int) -> None:
         """Mark a line has having been udpated.
