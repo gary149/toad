@@ -7,9 +7,9 @@ type OS = Literal["macos", "linux", "windows", "*"]
 type Action = str
 """An action which the agent supports."""
 type AgentType = Literal["coding", "chat"]
-"""The type of agent."""
+"""The type of agent. More types TBD."""
 type AgentProtocol = Literal["acp"]
-"""The protocol used to communicate with the agent"""
+"""The protocol used to communicate with the agent. Currently only "acp" is supported."""
 
 
 class Command(TypedDict):
@@ -30,6 +30,8 @@ class Agent(TypedDict):
 
     active: NotRequired[bool]
     """If `True` (default), the agent will be shown in the UI. If `False` the agent will be removed from the UI."""
+    recommended: NotRequired[bool]
+    """Agent is in recommended set. Set to `True` in main branch only if previously agreed with Will McGugan."""
     identity: str
     """A unique identifier for this agent. Should be a domain the agent developer owns,
     although it doesn't have to resolve to anything. Must be useable in a filename on all platforms. 
@@ -43,7 +45,7 @@ class Agent(TypedDict):
     protocol: AgentProtocol
     """The protocol used by the agent. Currently only 'acp' is supported."""
     type: "AgentType"
-    """The type of the agent. Typically "coding" for agentic coding."""
+    """The type of the agent. Currently "coding" or "chat". More types TBD."""
     author_name: str
     """The author of the agent. For example 'Anthropic'."""
     author_url: str
@@ -56,15 +58,9 @@ class Agent(TypedDict):
     """A description of the agent. A few sentences max. May contain content markup (https://textual.textualize.io/guide/content/#markup) if used subtly."""
     tags: list[Tag]
     """Tags which identify the agent. Should be empty for now."""
-
     help: str
     """A Markdown document with additional details regarding the agent."""
-
     run_command: dict[OS, str]
     """Command to run the agent, by OS or wildcard."""
-
     actions: dict[OS, dict[Action, Command]]
     """Scripts to perform actions, typically at least to install the agent."""
-
-    recommended: NotRequired[bool]
-    """Agent is in recommended set."""
