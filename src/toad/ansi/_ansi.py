@@ -113,7 +113,7 @@ class FEPattern(Pattern):
                 return ("dcs", sequence.getvalue())
 
             # Character set designation
-            case "(" | ")" | "*" | "+" | "-" | "." | "//":
+            case "(" | ")" | "*" | "+" | "-" | "." | "/":
                 if (character := (yield)) not in self.FINAL:
                     return False
                 store(character)
@@ -142,27 +142,11 @@ class ANSIParser(StreamParser[tuple[str, str]]):
 
         while True:
             token = yield self.read_until(NEW_LINE, CARRIAGE_RETURN, ESCAPE, BACKSPACE)
-
             if isinstance(token, SeparatorToken):
                 if token.text == ESCAPE:
                     token = yield self.read_patterns("\x1b", fe=FEPattern())
                     if isinstance(token, PatternToken):
                         yield token.value
-
-                    # if isinstance(token, PatternToken):
-                    #     token_type, _ = token.value
-
-                    #     if token_type == "osc":
-                    #         osc_data = io.StringIO()
-                    #         while not isinstance(
-                    #             token := (yield self.read_regex(r"\x1b\\|\x07")),
-                    #             MatchToken,
-                    #         ):
-                    #             osc_data.write(token.text)
-                    #         yield "osc", osc_data.getvalue()
-                    #     else:
-                    #         yield token.value
-
                 else:
                     yield "separator", token.text
                 continue
@@ -635,7 +619,7 @@ class ANSIStream:
                 slot, character_set = list(dec)
                 yield ANSICharacterSet(DEC(DEC_SLOTS[slot], character_set))
 
-            case ["dev_invoke", dec_invoke]:
+            case ["dec_invoke", dec_invoke]:
                 yield ANSICharacterSet(dec_invoke=self.DEC_INVOKE_MAP[dec_invoke[0]])
 
             case ["control", code]:
@@ -644,7 +628,8 @@ class ANSIStream:
                         yield ANSICursor(delta_y=-1, auto_scroll=True)
                     elif control == "ind":
                         yield ANSICursor(delta_y=+1, auto_scroll=True)
-                print("CONTROL", repr(code), repr(control))
+                    else:
+                        print("CONTROL", repr(code), repr(control))
 
             case ["content", text]:
                 yield ANSICursor(delta_x=len(text), text=text)
@@ -1146,7 +1131,7 @@ class TerminalState:
                 self.update_line(buffer, line_no, copy_content, copy_style)
 
     def _handle_ansi_command(self, ansi_command: ANSICommand) -> None:
-        # print(repr(ansi_command))
+        print(repr(ansi_command))
 
         if isinstance(ansi_command, ANSINewLine):
             if self.alternate_screen:

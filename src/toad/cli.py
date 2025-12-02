@@ -6,11 +6,12 @@ from toad.app import ToadApp
 
 @click.group(invoke_without_command=True)
 @click.pass_context
-def main(ctx):
+@click.option("--project-dir", metavar="PATH", default=None)
+def main(ctx, project_dir: str | None):
     """Toad. The Batrachian AI."""
     if ctx.invoked_subcommand is not None:
         return
-    app = ToadApp(mode="store")
+    app = ToadApp(mode="store", project_dir=project_dir)
     app.run()
 
 

@@ -27,7 +27,7 @@ def session_new(
     ...
 
 
-@API.method(name="session/cancel")
+@API.notification(name="session/cancel")
 def session_cancel(sessionId: str, _meta: dict):
     """https://agentclientprotocol.com/protocol/prompt-turn#cancellation"""
     ...

@@ -181,13 +181,20 @@ class ToolCall(containers.VerticalGroup):
             else:
                 expand_icon = Content("▶ ")
 
+        # header = Content.assemble(
+        #     expand_icon,
+        #     "🔧 ",
+        #     pill(kind, "$primary-muted", "$text-primary"),
+        #     " ",
+        #     (title, "$text-success"),
+        # )
+
         header = Content.assemble(
             expand_icon,
             "🔧 ",
-            pill(kind, "$primary-muted", "$text-primary"),
-            " ",
             (title, "$text-success"),
         )
+
         if status == "pending":
             header += Content.assemble(" ⏲")
         elif status == "in_progress":

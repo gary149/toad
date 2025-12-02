@@ -402,6 +402,8 @@ class Agent(AgentBase):
                     tasks.discard(task)
 
         while line := await process.stdout.readline():
+            print("READ LINE bytes", repr(line))
+            print("READ LINE utf8", repr(line.decode("utf-8")))
             # This line should contain JSON, which may be:
             #   A) a JSONRPC request
             #   B) a JSONRPC response to a previous request
@@ -412,10 +414,16 @@ class Agent(AgentBase):
             agent_output.flush()
 
             try:
-                agent_data: jsonrpc.JSONType = json.loads(line.decode("utf-8"))
-            except Exception:
-                # TODO: handle this
-                raise
+                line_str = line.decode("utf-8")
+            except Exception as error:
+                print("Unable to decode utf-8from agent:", error)
+                continue
+
+            try:
+                agent_data: jsonrpc.JSONType = json.loads(line_str)
+            except Exception as error:
+                print("Error decodeing JSON from agent:", error)
+                continue
 
             log(agent_data)
 
@@ -434,6 +442,10 @@ class Agent(AgentBase):
                 ):
                     API.process_response(agent_data)
                     continue
+
+            if not isinstance(agent_data, dict):
+                print("Invalid JSON from agent:", repr(agent_data))
+                continue
 
             # By this point we know it is a JSON RPC call
             assert isinstance(agent_data, dict)
