@@ -775,7 +775,7 @@ class Buffer:
         cursor_offset = self.cursor_offset
 
         if delta_x > 0:
-            while delta_x > 0:
+            while delta_x > 0 and cursor_line < len(self.folded_lines):
                 line_length = len(self.folded_lines[cursor_line].content)
                 if cursor_offset + delta_x > line_length:
                     cursor_line += 1
@@ -786,7 +786,7 @@ class Buffer:
                     delta_x = 0
         elif delta_x < 0:
             delta_x = -delta_x
-            while delta_x > 0:
+            while delta_x > 0 and cursor_line > 0:
                 if cursor_offset >= delta_x:
                     cursor_offset -= delta_x
                     delta_x = 0
