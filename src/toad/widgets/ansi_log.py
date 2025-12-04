@@ -230,7 +230,7 @@ class ANSILog(ScrollView, can_focus=False):
                     cursor_line_offset = self.cursor_line_offset
 
                     if replace is not None:
-                        start_replace, end_replace = ansi_command.get_replace_offsets(
+                        start_replace, end_replace = ansi_command.get_clear_offsets(
                             cursor_line_offset, len(line.content)
                         )
                         updated_line = Content.assemble(

@@ -170,7 +170,8 @@ if __name__ == "__main__":
 
     COMMAND = "htop"
     COMMAND = "python test_scroll_margins.py"
-    COMMAND = "htop"
+    COMMAND = "python table_movie.py"
+    COMMAND = "python"
 
     class CommandApp(App):
         CSS = """

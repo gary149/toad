@@ -341,7 +341,16 @@ class Terminal(ScrollView, can_focus=True):
             except IndexError:
                 pass
 
-        strip = Strip(line.render_segments(visual_style), cell_length=line.cell_length)
+        try:
+            strip = Strip(
+                line.render_segments(visual_style), cell_length=line.cell_length
+            )
+        except Exception:
+            from traceback import print_exc
+
+            print_exc()
+            self.log(line.spans)
+            strip = Strip.blank(line.cell_length)
 
         if cache_key is not None:
             self._terminal_render_cache[cache_key] = strip
