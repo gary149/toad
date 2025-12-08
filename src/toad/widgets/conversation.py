@@ -466,11 +466,11 @@ class Conversation(containers.Vertical):
         return None
 
     @on(AgentReady)
-    def on_agent_ready(self) -> None:
-        self.agent_ready = True
+    async def on_agent_ready(self) -> None:
         if self.agent is not None:
             content = Content.assemble(self.agent.get_info(), " connected")
             self.flash(content, style="success")
+        self.agent_ready = True
 
     @on(AgentFail)
     async def on_agent_fail(self, message: AgentFail) -> None:
@@ -481,7 +481,7 @@ class Conversation(containers.Vertical):
             error = Content.assemble(
                 Content.from_markup(message.message).stylize("$text-error"),
                 " - ",
-                Content.from_markup(message.details.strip()).stylize("dim")
+                Content.from_markup(message.details.strip()).stylize("dim"),
             )
         else:
             error = Content.from_markup(message.details.strip()).stylize("$text-error")

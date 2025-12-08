@@ -80,19 +80,16 @@ class Shell:
         return self._finished
 
     async def send(self, command: str, width: int, height: int) -> None:
-        if self.master is None:
-            return
-        self._hide_echo.clear()
         await self._ready_event.wait()
-        await asyncio.to_thread(resize_pty, self.master, width, max(height, 1))
-        # await self.write(f"{command}\n", hide_echo=True)
-        # await self.write(r'printf "\e]2025;$(pwd);\e\\"' + "\n", hide_echo=True)
-        get_pwd_command = f"{command};" + r'printf "\e]2025;$(pwd);\e\\"' + "\n"
-        await self.write(get_pwd_command, hide_echo=True)
-
-        # await self.write(get_pwd_command.encode("utf-8"), hide_echo=True)
+        if self.master is None:
+            print("TTY FD not set")
+            return
 
         self.terminal = None
+        await asyncio.to_thread(resize_pty, self.master, width, max(height, 1))
+
+        get_pwd_command = f"{command};" + r'printf "\e]2025;$(pwd);\e\\"' + "\n"
+        await self.write(get_pwd_command, hide_echo=True)
 
     def start(self) -> None:
         assert self._task is None
@@ -173,6 +170,8 @@ class Shell:
             lambda: protocol, os.fdopen(master, "rb", 0)
         )
 
+        self._ready_event.set()
+
         if shell_start := self.shell_start.strip():
             shell_start = self.shell_start.strip()
             if not shell_start.endswith("\n"):
@@ -180,8 +179,6 @@ class Shell:
             await self.write(shell_start, hide_echo=True)
 
         unicode_decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
-
-        self._ready_event.set()
 
         while True:
             data = await shell_read(reader, BUFFER_SIZE)
@@ -192,7 +189,7 @@ class Shell:
                     data = data.replace(remove_bytes, b"", 1)
                     self._hide_echo.discard(string_bytes)
                     if not data:
-                        continue
+                        data = b"\r"
 
             if line := unicode_decoder.decode(data, final=not data):
                 if self.terminal is None or self.terminal.is_finalized:
@@ -218,6 +215,7 @@ class Shell:
             ):
                 await self.terminal.remove()
                 self.terminal = None
+
             if not data:
                 break
 

@@ -130,7 +130,6 @@ class Server:
             # Batch call
             response = await self._dispatch_batch(json)
         log.debug(f"OUT {response}")
-        textual.log(response)
         return response
 
     def expose_instance(self, instance: object) -> None:
