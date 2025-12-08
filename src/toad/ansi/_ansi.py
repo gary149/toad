@@ -6,7 +6,7 @@ import re
 
 from dataclasses import dataclass, field
 from functools import lru_cache
-from typing import Any, Callable, Iterable, Literal, Mapping, NamedTuple
+from typing import Any, Awaitable, Callable, Iterable, Literal, Mapping, NamedTuple
 
 import rich.repr
 
@@ -564,8 +564,8 @@ class ANSIStream:
                         else cls.DISABLE_REPLACE_MODE
                     )
 
-                case ["6", _, "n"]:                    
-                    return ANSICursorPositionRequest()                    
+                case ["6", _, "n"]:
+                    return ANSICursorPositionRequest()
 
                 case _:
                     print("Unknown CSI (a)", repr(csi))
@@ -832,7 +832,9 @@ class Buffer:
     @property
     def is_blank(self) -> bool:
         """Is this buffer blank (spaces in all lines)?"""
-        return not any(line.content.plain.strip() for line in self.lines)
+        return not any(
+            (line.content.plain.strip() or line.content.spans) for line in self.lines
+        )
 
     def update_cursor(self, line_no: int, cursor_line_offset: int) -> None:
         """Move the cursor to the given unfolded line and offset.
@@ -946,14 +948,18 @@ class TerminalState:
     """Abstract terminal state."""
 
     def __init__(
-        self, write_stdin: Callable[[str], Any], *, width: int = 80, height: int = 24
+        self,
+        write_stdin: Callable[[str], Awaitable],
+        *,
+        width: int = 80,
+        height: int = 24,
     ) -> None:
         """
         Args:
             width: Initial width.
             height: Initial height.
         """
-        self._write_stdin: Callable[[str], Any] | None = write_stdin
+        self._write_stdin = write_stdin
 
         self._ansi_stream = ANSIStream()
         """ANSI stream processor."""
@@ -1005,9 +1011,9 @@ class TerminalState:
         yield "dec_state", self.dec_state
         yield "mouse_tracking", self.mouse_tracking, None
 
-    def write_stdin(self, text: str) -> bool:
+    async def write_stdin(self, text: str) -> bool:
         if self._write_stdin is not None:
-            self._write_stdin(text)
+            return await self._write_stdin(text)
             return False
         return True
 
@@ -1130,7 +1136,7 @@ class TerminalState:
             buffer.cursor_line = fold_cursor_line
             buffer.cursor_offset = fold_cursor_offset
 
-    def write(self, text: str) -> tuple[set[int] | None, set[int] | None]:
+    async def write(self, text: str) -> tuple[set[int] | None, set[int] | None]:
         """Write to the terminal.
 
         Args:
@@ -1148,7 +1154,7 @@ class TerminalState:
         scrollback_buffer._updated_lines = set()
         # Write sequences and update
         for ansi_command in self._ansi_stream.feed(text):
-            self._handle_ansi_command(ansi_command)
+            await self._handle_ansi_command(ansi_command)
 
         # Get deltas
         scrollback_updates = (
@@ -1260,7 +1266,7 @@ class TerminalState:
             content += Content.blank(offset - len(content), style)
         return content
 
-    def _handle_ansi_command(self, ansi_command: ANSICommand) -> None:
+    async def _handle_ansi_command(self, ansi_command: ANSICommand) -> None:
         if isinstance(ansi_command, ANSINewLine):
             if self.alternate_screen:
                 # New line behaves differently in alternate screen
@@ -1471,7 +1477,7 @@ class TerminalState:
             case ANSICursorPositionRequest():
                 row = self.buffer.cursor_line + 1
                 column = self.buffer.cursor_offset + 1
-                self.write_stdin(f"\x1b[{row};{column}R")
+                await self.write_stdin(f"\x1b[{row};{column}R")
 
             case _:
                 print("Unhandled", ansi_command)

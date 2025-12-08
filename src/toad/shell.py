@@ -65,13 +65,15 @@ class Shell:
         self.new_log: bool = False
         self.shell = shell or os.environ.get("SHELL", "sh")
         self.shell_start = start
-        self.master = 0
+        self.master: int | None = None
         self._task: asyncio.Task | None = None
         self._process: asyncio.subprocess.Process | None = None
-        self.writer: asyncio.WriteTransport | None = None
 
         self._finished: bool = False
         self._ready_event: asyncio.Event = asyncio.Event()
+
+        self._hide_echo: set[bytes] = set()
+        """A set of byte strings to remove from output."""
 
     @property
     def is_finished(self) -> bool:
@@ -79,23 +81,15 @@ class Shell:
 
     async def send(self, command: str, width: int, height: int) -> None:
         await self._ready_event.wait()
-        assert self.writer is not None
-
-        resize_pty(self.master, width, max(height, 1))
-
-        old_settings = termios.tcgetattr(self.master)
-
-        # Disable echo
-        new_settings = termios.tcgetattr(self.master)
-        new_settings[3] = new_settings[3] & ~termios.ECHO  # lflag is at index 3
-        termios.tcsetattr(self.master, termios.TCSADRAIN, new_settings)
-
-        get_pwd_command = f"{command};" + r'printf "\e]2025;$(pwd);\e\\"' + "\n"
-        self.writer.write(get_pwd_command.encode("utf-8"))
-
-        termios.tcsetattr(self.master, termios.TCSADRAIN, old_settings)
+        if self.master is None:
+            print("TTY FD not set")
+            return
 
         self.terminal = None
+        await asyncio.to_thread(resize_pty, self.master, width, max(height, 1))
+
+        get_pwd_command = f"{command};" + r'printf "\e]2025;$(pwd);\e\\"' + "\n"
+        await self.write(get_pwd_command, hide_echo=True)
 
     def start(self) -> None:
         assert self._task is None
@@ -103,8 +97,7 @@ class Shell:
 
     async def interrupt(self) -> None:
         """Interrupt the running command."""
-        if self.writer is not None:
-            self.writer.write(b"\x03")
+        await self.write(b"\x03")
 
     def update_size(self, width: int, height: int) -> None:
         """Update the size of the shell pty.
@@ -113,8 +106,18 @@ class Shell:
             width: Desired width.
             height: Desired height.
         """
+        if self.master is None:
+            return
         with suppress(OSError):
             resize_pty(self.master, width, max(height, 1))
+
+    async def write(self, text: str | bytes, hide_echo: bool = False) -> int:
+        if self.master is None:
+            return 0
+        text_bytes = text.encode("utf-8", "ignore") if isinstance(text, str) else text
+        if hide_echo:
+            self._hide_echo.add(text_bytes)
+        return await asyncio.to_thread(os.write, self.master, text_bytes)
 
     async def run(self) -> None:
         current_directory = self.working_directory
@@ -167,62 +170,55 @@ class Shell:
             lambda: protocol, os.fdopen(master, "rb", 0)
         )
 
-        # Create write transport
-        writer_protocol = asyncio.BaseProtocol()
-        write_transport, _ = await loop.connect_write_pipe(
-            lambda: writer_protocol,
-            os.fdopen(os.dup(master), "wb", 0),
-        )
-        self.writer = write_transport
+        self._ready_event.set()
 
         if shell_start := self.shell_start.strip():
-            # Get terminal attributes
-
-            old_settings = termios.tcgetattr(self.master)
-            new_settings = termios.tcgetattr(self.master)
-            new_settings[3] = new_settings[3] & ~termios.ECHO  # lflag is at index 3
-            termios.tcsetattr(self.master, termios.TCSADRAIN, new_settings)
-
             shell_start = self.shell_start.strip()
             if not shell_start.endswith("\n"):
                 shell_start += "\n"
-            self.writer.write(shell_start.encode("utf-8"))
-
-            termios.tcsetattr(slave, termios.TCSADRAIN, old_settings)
+            await self.write(shell_start, hide_echo=True)
 
         unicode_decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
 
-        def write_stdin(input: str) -> None:
-            if self.writer is not None:
-                self.writer.write(input.encode("utf-8"))
+        while True:
+            data = await shell_read(reader, BUFFER_SIZE)
+            
+            for string_bytes in list(self._hide_echo):                
+                remove_bytes = string_bytes.replace(b"\n", b"\r\n")
+                if remove_bytes in data:                    
+                    data = data.replace(remove_bytes, b"")                    
+                    self._hide_echo.discard(string_bytes)
+                    if not data:
+                        data = b"\r"                    
 
-        self._ready_event.set()
-        try:
-            while True:
-                data = await shell_read(reader, BUFFER_SIZE)
+            if line := unicode_decoder.decode(data, final=not data):
+                if self.terminal is None or self.terminal.is_finalized:
+                    previous_state = (
+                        None if self.terminal is None else self.terminal.state
+                    )
+                    self.terminal = await self.conversation.new_terminal()
+                    # if previous_state is not None:
+                    #     self.terminal.set_state(previous_state)
+                    self.terminal.set_write_to_stdin(self.write)
+                if await self.terminal.write(line):
+                    self.terminal.display = True
+                new_directory = self.terminal.current_directory
+                if new_directory and new_directory != current_directory:
+                    current_directory = new_directory
+                    self.conversation.post_message(
+                        CurrentWorkingDirectoryChanged(current_directory)
+                    )
+            if (
+                self.terminal is not None
+                and self.terminal.is_finalized
+                and self.terminal.state.scrollback_buffer.is_blank
+            ):
+                await self.terminal.remove()
+                self.terminal = None
 
-                if line := unicode_decoder.decode(data, final=not data):
-                    if self.terminal is None or self.terminal.is_finalized:
-                        previous_state = (
-                            None if self.terminal is None else self.terminal.state
-                        )
-                        self.terminal = await self.conversation.new_terminal()
-                        # if previous_state is not None:
-                        #     self.terminal.set_state(previous_state)
-                        self.terminal.set_write_to_stdin(write_stdin)
-                    if self.terminal.write(line):
-                        self.terminal.display = True
-                    new_directory = self.terminal.current_directory
-                    if new_directory and new_directory != current_directory:
-                        current_directory = new_directory
-                        self.conversation.post_message(
-                            CurrentWorkingDirectoryChanged(current_directory)
-                        )
-                if not data:
-                    break
+            if not data:
+                break
 
-        finally:
-            transport.close()
-        self.writer = None
+        self.master = None
         self._finished = True
         self.conversation.post_message(ShellFinished())
