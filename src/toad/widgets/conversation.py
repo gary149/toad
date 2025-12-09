@@ -1377,7 +1377,7 @@ class Conversation(containers.Vertical):
             await self.post(MarkdownNote(about_md, classes="about"))
             self.app.copy_to_clipboard(about_md)
             self.notify(
-                "A copy of /about-about has been placed in your clipboard",
+                "A copy of /about-toad has been placed in your clipboard",
                 title="About",
             )
             return True
