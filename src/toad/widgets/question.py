@@ -132,7 +132,7 @@ class Question(Widget, can_focus=True):
         ),
         Binding(
             "a",
-            "select_kind('allow_once')",
+            "select_kind(('allow_once', 'allow'))",
             "Allow once",
             group=ALLOW_GROUP,
         ),
@@ -144,7 +144,7 @@ class Question(Widget, can_focus=True):
         ),
         Binding(
             "r",
-            "select_kind('reject_once')",
+            "select_kind(('reject_once', 'reject'))",
             "Reject once",
             group=REJECT_GROUP,
         ),
@@ -287,12 +287,15 @@ class Question(Widget, can_focus=True):
         )
         self.selected = True
 
-    def action_select_kind(self, kind: str) -> None:
-        for index, answer in enumerate(self.options):
-            if answer.kind == kind:
-                self.selection = index
-                self.action_select()
-                break
+    def action_select_kind(self, kind: str | tuple[str]) -> None:
+        kinds = kind if isinstance(kind, tuple) else (kind,)
+        for kind in kinds:
+            for index, answer in enumerate(self.options):
+                print(index, answer)
+                if answer.kind == kind:
+                    self.selection = index
+                    self.action_select()
+                    break
 
     @on(Option.Selected)
     def on_option_selected(self, event: Option.Selected) -> None:

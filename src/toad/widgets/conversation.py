@@ -642,10 +642,7 @@ class Conversation(containers.Vertical):
     async def on_acp_request_permission(self, message: acp_messages.RequestPermission):
         message.stop()
         options = [
-            Answer(
-                option["name"],
-                option["optionId"],
-            )
+            Answer(option["name"], option["optionId"], option["kind"])
             for option in message.options
         ]
         self.request_permissions(
