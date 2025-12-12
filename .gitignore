@@ -11,6 +11,8 @@ wheels/
 .DS_Store
 .vscode
 .zed
+.git
+.mypy_cache
 
 agent.jsonl
 replay.jsonl

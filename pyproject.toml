@@ -19,6 +19,7 @@ dependencies = [
     "packaging>=25.0",
     "posthog>=7.0.1",
     "bashlex>=0.18",
+    "pathspec>=0.12.1",
 ]
 
 [tool.uv.workspace]

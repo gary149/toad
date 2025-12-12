@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import asyncio
-from asyncio import to_thread
 import fnmatch
-from typing import Callable, Sequence
-
+from typing import Callable, Iterable, Sequence
 from time import time
 from os import PathLike
-
 from pathlib import Path
+
+from pathspec import PathSpec
 
 
 class ScanJob:
@@ -21,15 +20,45 @@ class ScanJob:
         results: list[Path],
         exclude_dirs: Sequence[str],
         exclude_files: Sequence[str],
+        path_spec: PathSpec | None = None,
     ) -> None:
         self.queue = queue
         self.results = results
         self.exclude_dirs = exclude_dirs
         self.exclude_files = exclude_files
         self.name = name
+        self.path_spec = path_spec
 
     def start(self) -> None:
         self._task = asyncio.create_task(self.run())
+
+    async def is_file(self, path: Path) -> bool:
+        """Check if the path references a file.
+
+        Args:
+            path: A path.
+
+        Returns:
+            `True` if the path is a file, `False` if it isn't or an error occured.
+        """
+        try:
+            return await asyncio.to_thread(path.is_file)
+        except OSError:
+            return False
+
+    async def is_dir(self, path: Path) -> bool:
+        """Check if the path references a directory.
+
+        Args:
+            path: A path.
+
+        Returns:
+            `True` if the path is a directory, `False` if it isn't or an error occured.
+        """
+        try:
+            return await asyncio.to_thread(path.is_dir)
+        except OSError:
+            return False
 
     async def run(self) -> None:
         queue = self.queue
@@ -39,37 +68,52 @@ class ScanJob:
                 scan_path = await queue.get()
             except asyncio.QueueShutDown:
                 break
-            paths = await to_thread(self._scan, scan_path)
+            paths = await self._scan(scan_path)
             for path in paths:
-                if path.is_file():
+                if self.path_spec is not None and self.path_spec.match_file(path):
+                    continue
+                if await self.is_file(path):
                     str_path = str(path.name)
                     for exclude in self.exclude_files:
                         if fnmatch.fnmatch(str_path, exclude):
                             break
                     else:
                         results.append(path)
-                elif path.is_dir():
+                elif await self.is_dir(path):
                     str_path = str(path.name)
                     for exclude in self.exclude_dirs:
                         if fnmatch.fnmatch(str_path, exclude):
                             break
                     else:
-                        # results.append(path)
                         await queue.put(path)
             queue.task_done()
 
-    def _scan(self, root: Path) -> list[Path]:
-        try:
-            return list(root.iterdir())
-        except IOError:
-            return []
+    async def _scan(self, root: Path) -> list[Path]:
+        """Get a directory listing.
+
+        Args:
+            root: Root path.
+
+        Returns:
+            List of paths within the given directory, or empty list if an error occured.
+        """
+
+        def get_directory() -> list[Path]:
+            try:
+                return list(root.iterdir())
+            except IOError:
+                return []
+
+        return await asyncio.to_thread(get_directory)
 
 
 async def scan(
     root: Path,
+    *,
     max_simultaneous: int = 5,
     exclude_dirs: Sequence[str] | None = None,
     exclude_files: Sequence[str] | None = None,
+    path_spec: PathSpec | None = None,
 ) -> list[Path]:
     """Scan a directory for paths.
 
@@ -91,6 +135,7 @@ async def scan(
             results,
             exclude_dirs=exclude_dirs or [],
             exclude_files=exclude_files or [],
+            path_spec=path_spec,
         )
         for index in range(max_simultaneous)
     ]

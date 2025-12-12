@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+from functools import partial
 from os import PathLike
 from operator import itemgetter
 from pathlib import Path
 import re
-from typing import Sequence
+from typing import Callable, Iterable, Sequence
+
+import pathspec.patterns
+from pathspec import PathSpec
 
 from textual import on
 from textual.app import ComposeResult
@@ -132,6 +136,16 @@ class PathSearch(containers.VerticalGroup):
     def watch_root(self, root: Path) -> None:
         pass
 
+    @work(thread=True)
+    async def get_path_spec(self, git_ignore_path: Path) -> PathSpec | None:
+        if git_ignore_path.is_file():
+            spec_text = git_ignore_path.read_text()
+            spec = PathSpec.from_lines(
+                pathspec.patterns.GitWildMatchPattern, spec_text.splitlines()
+            )
+            return spec
+        return None
+
     @work(exclusive=True)
     async def load_paths(self) -> None:
         self.input.clear()
@@ -139,7 +153,10 @@ class PathSearch(containers.VerticalGroup):
         root = self.root
 
         self.loading = True
-        paths = await directory.scan(root, exclude_dirs=[".*", "__*__"])
+
+        path_spec = await self.get_path_spec(root / ".gitignore").wait()
+        paths = await directory.scan(root, path_spec=path_spec)
+
         paths = [path.absolute() for path in paths]
         paths.sort(key=lambda path: (len(path.parts), str(path)))
         self.root = root
