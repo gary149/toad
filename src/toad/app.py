@@ -8,10 +8,11 @@ from typing import Any, ClassVar, TYPE_CHECKING
 
 from rich import terminal_theme
 
-from textual import work
+from textual import on, work
 from textual.binding import Binding, BindingType
 from textual.reactive import var, reactive
 from textual.app import App
+from textual import events
 from textual.signal import Signal
 
 
@@ -396,6 +397,16 @@ class ToadApp(App, inherit_bindings=False):
             self.switch_mode(mode)
 
         self.set_timer(1, self.run_version_check)
+
+    @on(events.TextSelected)
+    async def on_text_selected(self) -> None:
+        if self.settings.get("ui.auto_copy", bool):
+            if (selection := self.screen.get_selected_text()) is not None:
+                self.copy_to_clipboard(selection)
+                self.notify(
+                    "Copied selection to clipboard (see settings)",
+                    title="Automatic copy",
+                )
 
     def run_on_exit(self):
         if self.update_required and self.version_meta is not None:

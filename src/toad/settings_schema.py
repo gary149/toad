@@ -80,6 +80,13 @@ SCHEMA: list[SchemaDict] = [
                 "default": 3.0,
                 "validate": [{"type": "minimum", "value": 0.5}],
             },
+            {
+                "key": "auto_copy",
+                "title": "Automatic copy",
+                "help": "Automatically copy text on selection?\nDoesn't apply to text areas (use ctrl+c to copy).",
+                "type": "boolean",
+                "default": True,
+            },
         ],
     },
     {

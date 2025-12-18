@@ -17,6 +17,8 @@ from textual.css.query import NoMatches
 from textual.message import Message
 from textual import containers
 from textual import widgets
+from textual.selection import Selection
+from textual.widget import Widget
 
 import toad
 from toad.app import ToadApp
