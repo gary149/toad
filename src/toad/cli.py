@@ -64,6 +64,7 @@ def main():
 @click.argument("project_dir", metavar="PATH", required=False, default=".")
 @click.option("-a", "--agent", metavar="AGENT", default="")
 @click.option(
+    "-p",
     "--port",
     metavar="PORT",
     default=8000,
@@ -71,13 +72,14 @@ def main():
     help="Port to use in conjunction with --serve",
 )
 @click.option(
+    "-H",
     "--host",
     metavar="HOST",
     default="localhost",
     type=str,
     help="Host to use in conjunction with --serve",
 )
-@click.option("--serve", is_flag=True, help="Serve Toad as a web application")
+@click.option("-s", "--serve", is_flag=True, help="Serve Toad as a web application")
 def run(port: int, host: str, serve: bool, project_dir: str = ".", agent: str = "1"):
     """Run an agent (with also run with `toad PATH`)."""
 
@@ -103,7 +105,10 @@ def run(port: int, host: str, serve: bool, project_dir: str = ".", agent: str = 
         try:
             command_args.remove("--serve")
         except ValueError:
-            pass
+            try:
+                command_args.remove("-s")
+            except ValueError:
+                pass
         serve_command = shlex.join(command_args)
         server = Server(
             serve_command,
@@ -120,13 +125,15 @@ def run(port: int, host: str, serve: bool, project_dir: str = ".", agent: str = 
 @main.command("acp")
 @click.argument("command", metavar="COMMAND")
 @click.option(
+    "-t",
     "--title",
     metavar="TITLE",
     help="Optional title to display in the status bar",
     default=None,
 )
-@click.option("--project-dir", metavar="PATH", default=None)
+@click.option("-d", "--project-dir", metavar="PATH", default=None)
 @click.option(
+    "-p",
     "--port",
     metavar="PORT",
     default=8000,
@@ -134,12 +141,13 @@ def run(port: int, host: str, serve: bool, project_dir: str = ".", agent: str = 
     help="Port to use in conjunction with --serve",
 )
 @click.option(
+    "-H",
     "--host",
     metavar="HOST",
     default="localhost",
     help="Host to use in conjunction with --serve",
 )
-@click.option("--serve", is_flag=True, help="Serve Toad as a web application")
+@click.option("-s", "--serve", is_flag=True, help="Serve Toad as a web application")
 def acp(
     command: str,
     host: str,
@@ -223,8 +231,8 @@ def settings() -> None:
 
 
 @main.command("serve")
-@click.option("--port", metavar="PORT", default=8000, type=int)
-@click.option("--host", metavar="HOST", default="localhost")
+@click.option("-p", "--port", metavar="PORT", default=8000, type=int)
+@click.option("-H", "--host", metavar="HOST", default="localhost")
 def serve(port: int, host: str) -> None:
     """Serve Toad as a web application."""
     from textual_serve.server import Server
