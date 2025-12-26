@@ -72,11 +72,13 @@ Note that some agents require an ACP adapter to be installed to work with Toad.
 - Select the agent and hit ENTER
 - Click the dropdown, select "Install"
 - Click the GO button
-- Repeat the process to install an ACP adapte (if requried)
+- Repeat the process to install an ACP adapter (if required)
 
 Some agents may require you to restart your shell (open a new terminal) after installing.
 
-If that fails, please file a bug!
+If that fails, ask for help in [Discussions](https://github.com/batrachianai/toad/discussions)!
+
+https://github.com/batrachianai/toad/discussions
 """
 
 
