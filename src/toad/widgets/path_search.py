@@ -141,7 +141,11 @@ class PathSearch(containers.VerticalGroup):
                     compact=True, placeholder="fuzzy search \t[r]▌tab▐[/r] tree picker"
                 )
                 yield OptionList()
-            yield DirectoryTree(self.root, id="path-search-tree")
+            with containers.VerticalGroup(id="path-search-tree"):
+                yield widgets.Static(
+                    "tree view \t[r]▌tab▐[/r] fuzzy search", classes="message"
+                )
+                yield DirectoryTree(self.root)
 
     def on_mount(self) -> None:
         tree = self.query_one(DirectoryTree)
