@@ -17,7 +17,7 @@ from textual import events
 from textual.signal import Signal
 from textual.notifications import Notify
 
-
+import toad
 from toad.settings import Schema, Settings
 from toad.agent_schema import Agent as AgentData
 from toad.settings_schema import SCHEMA
@@ -366,10 +366,13 @@ class ToadApp(App, inherit_bindings=False):
         notification = Notify()
         notification.message = message
         notification.title = title
-        notification.application_name = "🐸 Toad"
+        notification.application_name = "🐸 Toad" if toad.os == "macos" else "Toad"
         if sound and self.settings.get("notifications.enable_sounds", bool):
             sound_path = str(files("toad.data").joinpath(f"sounds/{sound}.wav"))
             notification.audio = sound_path
+
+        icon_path = str(files("toad.data").joinpath("images/frog.png"))
+        notification.icon = icon_path
 
         notification.send()
 
