@@ -259,7 +259,7 @@ SCHEMA: list[SchemaDict] = [
                         "title": "Shell command",
                         "type": "string",
                         "help": "Command used to launch your shell on macOS.\n[bold]Note:[/] Requires restart.",
-                        "default": "${SHELL:-/bin/sh} +o interactive",
+                        "default": "/bin/sh",
                     },
                     {
                         "key": "start",
@@ -281,7 +281,7 @@ SCHEMA: list[SchemaDict] = [
                         "title": "Shell command",
                         "type": "string",
                         "help": "The command used to launch your shell on Linux.\n[bold]Note:[/] Requires restart.",
-                        "default": "${SHELL:-/bin/sh}",
+                        "default": "/bin/sh",
                     },
                     {
                         "key": "start",

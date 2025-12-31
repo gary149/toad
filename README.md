@@ -31,13 +31,20 @@ Toad is a terminal application.
 Any terminal will work, although if you are using the default terminal on macOS you will get a much reduced experience.
 I recommend [Ghostty](https://ghostty.org/) which is fully featured and has amazing performance.
 
-## Clipboard
+### Clipboard
 
 On Linux, you may need to install `xclip` to enable clipboard support.
 
 ```
 sudo apt install xclip
 ```
+
+### Alternative shells
+
+I'd like Toad to run multiple shells, but there are some compatibility issues I need to work out first, so for the moment the default is to use `/bin/sh`.
+
+You can change the shell in settings. If you have any success, let me know.
+
 
 ## Getting Started
 
@@ -122,6 +129,8 @@ toad serve
 Toad was built by [Will McGugan](https://github.com/willmcgugan) and is currently under active development.
 
 To discuss Toad, see the Discussions tab, or join the #toad channel on the [Textualize discord server](https://discord.gg/Enf6Z3qhVr).
+
+
 
 ### Roadmap
 
