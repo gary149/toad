@@ -694,18 +694,11 @@ class Conversation(containers.Vertical):
             self.window.focus(scroll_visible=False)
         await event.menu.remove()
 
-    # @on(CurrentWorkingDirectoryChanged)
-    # def on_current_working_directory_changed(
-    #     self, event: CurrentWorkingDirectoryChanged
-    # ) -> None:
-    #     if self._terminal is not None:
-    #         self._terminal.finalize()
-    #     self.working_directory = str(Path(event.path).resolve().absolute())
-
-    # @on(ShellFinished)
-    # def on_shell_finished(self) -> None:
-    #     if self._terminal is not None:
-    #         self._terminal.finalize()
+    @on(CurrentWorkingDirectoryChanged)
+    def on_current_working_directory_changed(
+        self, event: CurrentWorkingDirectoryChanged
+    ) -> None:
+        self.working_directory = str(Path(event.path).resolve().absolute())
 
     def watch_busy_count(self, busy: int) -> None:
         self.throbber.set_class(busy > 0, "-busy")
