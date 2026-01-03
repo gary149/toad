@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## [0.5.16] - 2026-01-03
+## [0.5.17] - 2026-01-03
 
 ### Fixed
 
@@ -118,10 +118,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - First release. This document will be updated for subsequent releases.
 
-[0.5.16: https://github.com/Textualize/textual/compare/v0.5.15...v0.5.16
-[0.5.15: https://github.com/Textualize/textual/compare/v0.5.14...v0.5.15
-[0.5.14: https://github.com/Textualize/textual/compare/v0.5.13...v0.5.14
-[0.5.13: https://github.com/Textualize/textual/compare/v0.5.12...v0.5.13
+[0.5.17]: https://github.com/Textualize/textual/compare/v0.5.16...v0.5.17
+[0.5.16]: https://github.com/Textualize/textual/compare/v0.5.15...v0.5.16
+[0.5.15]: https://github.com/Textualize/textual/compare/v0.5.14...v0.5.15
+[0.5.14]: https://github.com/Textualize/textual/compare/v0.5.13...v0.5.14
+[0.5.13]: https://github.com/Textualize/textual/compare/v0.5.12...v0.5.13
 [0.5.12]: https://github.com/Textualize/textual/compare/v0.5.11...v0.5.12
 [0.5.11]: https://github.com/Textualize/textual/compare/v0.5.10...v0.5.11
 [0.5.10]: https://github.com/Textualize/textual/compare/v0.5.9...v0.5.10
