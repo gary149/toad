@@ -117,15 +117,29 @@ class Agent(AgentBase):
         yield self.command
 
     def log(self, line: str) -> None:
-        """Write text to the agent log file."""
+        """Write text to the agent log file.
+
+        Args:
+            line: Text to be logged.
+
+        """
         if self._message_target is not None:
             self._message_target.call_later(self._log, line)
 
     async def _log(self, line: str) -> None:
+        """Write text to the agent log file.
+
+        Intended to be called from `log`
+
+        Args:
+            line: Text to be logged.
+        """
+
         if self._message_target is None:
             return
 
         def write_log(log_file_path: Path, line: str):
+            """Write log in a thread."""
             try:
                 with log_file_path.open("at") as log_file:
                     log_file.write(line)
