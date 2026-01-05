@@ -45,6 +45,7 @@ class DirectoryWatcher(threading.Thread, FileSystemEventHandler):
 
     @property
     def enabled(self) -> bool:
+        """Is the DirectoryWatcher currently watching?"""
         return self._enabled
 
     def on_any_event(self, event: FileSystemEvent) -> None:
