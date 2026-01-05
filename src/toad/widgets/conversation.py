@@ -456,8 +456,9 @@ class Conversation(containers.Vertical):
             self._focusable_terminals.remove(event.terminal)
         except ValueError:
             pass
-        self.prompt.project_directory_updated()
-        if self._directory_changed:
+
+        if self._directory_changed or not self.is_watching_directory:
+            self.prompt.project_directory_updated()
             self._directory_changed = False
             self.post_message(messages.ProjectDirectoryUpdated())
 
@@ -1410,7 +1411,6 @@ class Conversation(containers.Vertical):
             await self.post(ShellResult(command))
             width, height = self.get_terminal_dimensions()
             await self.shell.send(command, width, height)
-            self.post_message(messages.ProjectDirectoryUpdated())
 
     def action_cursor_up(self) -> None:
         if not self.contents.displayed_children or self.cursor_offset == 0:

@@ -39,7 +39,6 @@ class DirectoryWatcher(threading.Thread, FileSystemEventHandler):
         """
         self._path = path
         self._widget = widget
-        self._observer = Observer()
         self._stop_event = threading.Event()
         self._enabled = False
         super().__init__(name=repr(self))
@@ -81,7 +80,7 @@ class DirectoryWatcher(threading.Thread, FileSystemEventHandler):
         except Exception:
             return
         self._enabled = True
-        while self._stop_event.wait(1):
+        while not self._stop_event.wait(1):
             pass
         try:
             observer.stop()
