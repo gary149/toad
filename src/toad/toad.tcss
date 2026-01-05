@@ -37,12 +37,15 @@ App.-hide-footer {
     }
 }
 
+
+
 App.-hide-thoughts AgentThought {
     display: none;
 }
 
 App.-hide-sidebar SideBar {    
     layer: sidebar;
+    
     offset-x: -100%;
     &:focus-within {
         offset-x: 0;            
@@ -162,18 +165,9 @@ Plan {
     }        
 }
 
-SideBar Plan {
-    border: none;
-    margin: 0 !important;
-    padding: 0 1 0 0;    
-    .plan {
-        color: $text-secondary;    
-    }
-}
-
 
 Conversation {    
-    Window {        
+    Window {                      
         layout: stream;
         margin: 0;                
         scrollbar-size-vertical: 2;        
@@ -221,11 +215,13 @@ Conversation {
 
     #cursor-container {            
         height: auto;
-        width: 1;                        
+        width: 1;                                
         outline-left: outer $foreground 7%;        
+        outline-top: blank;
         &> Cursor {
-            height: 1;            
-            width: 1;                                    
+            height: 0;            
+            width: 1;     
+                                 
             border-left: outer $text-accent;
             visibility: visible;
             &.-blink {
@@ -553,7 +549,7 @@ ModeSwitcher {
         
     border: none;
     padding: 0;
-    width: auto;
+    width: auto;    
     max-width: 100;
     
     overlay: screen;
@@ -581,28 +577,47 @@ MainScreen {
     background: $background;
     layers: sidebar screen base;    
 
-    SideBar {
+    SideBar {        
         border-right: tall black 10%;
-        background: transparent;
-              
+        background: transparent;        
         dock: left;
+
+        overflow: hidden scroll;
+        scrollbar-size: 0 0;
+        box-sizing: border-box;        
+        
         padding: 0 0;
         margin: 0;
         width: 40;
         max-width: 45%;
         min-width: 40;
-                
-
-        DirectoryTree {
+        height: 1fr;        
+                         
+        DirectoryTree {            
             background: transparent;
             &:focus {
                 background-tint: transparent;
-            }            
+            }                            
         }
 
-        
+
+        Plan {
+            border: none;
+            margin: 0 !important;
+            padding: 0 1 0 0;    
+            .plan {
+                color: $text-secondary;    
+            }
+        }
+
+
         Collapsible {   
-            expand: optimal;
+            
+            CollapsibleTitle {
+                height: 1;   
+                margin:0;             
+            }
+            
             width: 1fr;                  
             height: 1fr;              
             min-height: 3;
@@ -619,8 +634,8 @@ MainScreen {
                 width: 1fr;
                 height: auto;
                 max-height: 100%;
-                padding: 0;
-                margin: 1 0 0 0;                
+                margin: 0;
+                padding: 1 0 0 0;                                
             }
         }
 
@@ -661,7 +676,7 @@ Explain {
 }
 
 
-Footer {
+Footer {    
     background: transparent;
     .footer-key--key {
         color: $text;
