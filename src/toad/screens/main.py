@@ -100,7 +100,8 @@ class MainScreen(Screen, can_focus=False):
         return super().get_loading_widget()
 
     def compose(self) -> ComposeResult:
-        with containers.Center():
+
+        with containers.Container():
             yield SideBar(
                 SideBar.Panel("Plan", Plan([])),
                 SideBar.Panel(
@@ -112,10 +113,11 @@ class MainScreen(Screen, can_focus=False):
                     flex=True,
                 ),
             )
-            yield Conversation(self.project_path, self._agent).data_bind(
-                project_path=MainScreen.project_path,
-                column=MainScreen.column,
-            )
+            with containers.Center():
+                yield Conversation(self.project_path, self._agent).data_bind(
+                    project_path=MainScreen.project_path,
+                    column=MainScreen.column,
+                )
         yield Footer()
 
     def update_node_styles(self, animate: bool = True) -> None:

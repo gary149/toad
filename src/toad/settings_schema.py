@@ -223,6 +223,20 @@ SCHEMA: list[SchemaDict] = [
         "type": "object",
         "fields": [
             {
+                "key": "command",
+                "title": "Shell command",
+                "type": "string",
+                "help": "Command used to launch your shell on macOS.\n[bold]Note:[/] Requires restart.",
+                "default": "/bin/sh",
+            },
+            {
+                "key": "command_start",
+                "title": "Startup commands",
+                "type": "text",
+                "help": "Command(s) to run on shell start.",
+                "default": 'PS1=""',
+            },
+            {
                 "key": "warn_dangerous",
                 "title": "Warn against potentially destructive commands?",
                 "help": "If enabled, Toad will highlight potentially destructive commands that may modify the filesystem outside of the project directory.\n\nNote that false positive [i]and[/] false negatives are possible.",
@@ -249,28 +263,6 @@ SCHEMA: list[SchemaDict] = [
                 "help": "List of commands (one per line) which accept only a non-directory as their first argument (used in tab completion).",
                 "type": "text",
                 "default": "cat",
-            },
-            {
-                "key": "macos",
-                "title": "MacOS specific settings",
-                "help": "Edit only if you know what you are doing",
-                "type": "object",
-                "fields": [
-                    {
-                        "key": "run",
-                        "title": "Shell command",
-                        "type": "string",
-                        "help": "Command used to launch your shell on macOS.\n[bold]Note:[/] Requires restart.",
-                        "default": "/bin/sh",
-                    },
-                    {
-                        "key": "start",
-                        "title": "Startup commands",
-                        "type": "text",
-                        "help": "Command(s) to run on shell start.",
-                        "default": 'PS1=""',
-                    },
-                ],
             },
             {
                 "key": "linux",

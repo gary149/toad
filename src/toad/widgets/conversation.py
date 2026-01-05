@@ -5,7 +5,6 @@ import asyncio
 from contextlib import suppress
 from itertools import filterfalse
 from operator import attrgetter
-import platform
 from typing import TYPE_CHECKING, Literal
 from pathlib import Path
 from time import monotonic
@@ -194,6 +193,9 @@ class ContentsGrid(containers.Grid):
 class Window(containers.VerticalScroll):
     BINDING_GROUP_TITLE = "View"
     BINDINGS = [Binding("end", "screen.focus_prompt", "Prompt")]
+
+    def allow_focus(self) -> bool:
+        return self.show_vertical_scrollbar
 
     def update_node_styles(self, animate: bool = True) -> None:
         # TODO: Allow disabling in Textual
@@ -1159,6 +1161,7 @@ class Conversation(containers.Vertical):
         self.prompt.slash_commands = self._build_slash_commands()
 
     async def on_mount(self) -> None:
+        self.trap_focus()
         self.prompt.focus()
         self.prompt.slash_commands = self._build_slash_commands()
         self.call_after_refresh(self.post_welcome)
@@ -1366,22 +1369,16 @@ class Conversation(containers.Vertical):
         """A Shell instance."""
 
         if self._shell is None or self._shell.is_finished:
-            system = platform.system()
-            if system == "Darwin":
-                shell_command = self.app.settings.get(
-                    "shell.macos.run", str, expand=False
-                )
-                shell_start = self.app.settings.get(
-                    "shell.macos.start", str, expand=False
-                )
-            else:
-                shell_command = self.app.settings.get(
-                    "shell.linux.run", str, expand=False
-                )
-                shell_start = self.app.settings.get(
-                    "shell.linux.start", str, expand=False
-                )
-
+            shell_command = self.app.settings.get(
+                "shell.command",
+                str,
+                expand=False,
+            )
+            shell_start = self.app.settings.get(
+                "shell.command_start",
+                str,
+                expand=False,
+            )
             shell_directory = self.working_directory
             self._shell = Shell(
                 self, shell_directory, shell=shell_command, start=shell_start
