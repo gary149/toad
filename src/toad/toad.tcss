@@ -533,7 +533,7 @@ Prompt {
 
         StatusLine {            
             color: $secondary 70%;    
-            margin: 0 0;
+            margin: 0 1;
             width: auto;
             height: 1;    
             text-align: right;            
