@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added F1 key to toggle help panel
 - Added context help to main widgets
 
+### Changed
+
+- Changed sidebar binding to ctrl+b
+
 ## [0.5.24] - 2026-01-08
 
 ### Added
