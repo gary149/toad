@@ -1132,7 +1132,7 @@ class Conversation(containers.Vertical):
         else:
             notify_title = question
         notify_message = "\n".join(f" • {option.text}" for option in options)
-        self.app.system_notify(notify_message, title=notify_title)
+        self.app.system_notify(notify_message, title=notify_title, sound="question")
 
         self.prompt.ask(Ask(question, options, callback))
 
