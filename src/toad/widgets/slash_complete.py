@@ -20,6 +20,19 @@ from toad.slash_command import SlashCommand
 from toad.visuals.columns import Columns
 
 
+class SlashCompleteInput(widgets.Input):
+    BINDING_GROUP_TITLE = "Fuzzy search slash commands"
+    HELP = """\
+## Slash command fuzzy search
+
+Search for slash commands by typing a few characters from the command.
+
+- **cursor keys** Navigate list
+- **enter** Add command to prompt
+- **escape** Dismiss fuzzy search
+"""
+
+
 class SlashComplete(containers.VerticalGroup):
     """A widget to auto-complete slash commands."""
 
@@ -71,7 +84,7 @@ class SlashComplete(containers.VerticalGroup):
         self.fuzzy_search = FuzzySearch(case_sensitive=False)
 
     def compose(self) -> ComposeResult:
-        yield widgets.Input(compact=True, placeholder="fuzzy search")
+        yield SlashCompleteInput(compact=True, placeholder="fuzzy search")
         yield widgets.OptionList()
 
     def focus(self, scroll_visible: bool = False) -> Self:
