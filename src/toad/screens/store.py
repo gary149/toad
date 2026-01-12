@@ -179,7 +179,7 @@ class Launcher(containers.VerticalGroup):
                     yield LauncherItem(digit or "", agents[identity])
 
         if not launcher_agents:
-            yield widgets.Label("Chose your fighter below!", classes="no-agents")
+            yield widgets.Label("Choose your fighter below!", classes="no-agents")
 
 
 class LauncherItem(containers.VerticalGroup):
