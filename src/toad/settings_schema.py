@@ -176,20 +176,6 @@ SCHEMA: list[SchemaDict] = [
         ],
     },
     {
-        "key": "sidebar",
-        "title": "Sidebar settings",
-        "help": "Customize how the sidebar is displayed.",
-        "type": "object",
-        "fields": [
-            {
-                "key": "hide",
-                "title": "Hide the sidebar when not in use?",
-                "type": "boolean",
-                "default": False,
-            }
-        ],
-    },
-    {
         "key": "agent",
         "title": "Agent settings",
         "help": "Customize how you interact with agents",
@@ -298,21 +284,6 @@ SCHEMA: list[SchemaDict] = [
                     ("Split", "split"),
                     ("Best fit", "auto"),
                 ],
-            }
-        ],
-    },
-    {
-        "key": "launcher",
-        "title": "Launcher settings",
-        "help": "Customize the launcher",
-        "type": "object",
-        "editable": False,
-        "fields": [
-            {
-                "key": "agents",
-                "title": "Agents to show in the launcher",
-                "type": "text",
-                "default": "",
             }
         ],
     },

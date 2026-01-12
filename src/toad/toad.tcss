@@ -50,14 +50,6 @@ App.-hide-thoughts AgentThought {
     display: none;
 }
 
-App.-hide-sidebar SideBar {    
-    layer: sidebar;    
-    offset-x: -100%;
-    &:focus-within {
-        offset-x: 0;                    
-    }
-}
-
 App.-hide-status-line StatusLine {
     display: none;        
 }
@@ -140,44 +132,6 @@ Menu {
 Loading {
     color: $text-primary;    
     
-}
-
-
-
-Plan {        
-    border: panel $secondary;            
-    background: transparent;        
-    margin: 1 0 1 0 !important;   # Special case because the tall border reduces the apparent width           
-    padding: 1 0 0 1;        
-    height: auto;                        
-    grid-size: 2;
-    grid-columns: auto 1fr;
-    grid-rows: auto;        
-
-    .-no-plan {
-        text-style: dim italic;
-
-    }
-
-    .plan {
-        color: $text-secondary;
-    }
-    .status {
-        padding: 0 0 0 0;
-        color: $text-secondary;
-    }
-    .priority {
-        padding: 0 0 0 0;
-    }
-    .status.status-completed {
-        color: $text-success;            
-    }
-    .status-pending {
-        opacity: 0.7;
-    }
-    .plan.status-completed {
-        
-    }        
 }
 
 
@@ -411,53 +365,6 @@ Prompt {
         #prompt-container:focus-within {
             border: tall $primary;
         }
-    }    
-
-    PathSearch, SlashComplete {
-        display: none;
-        height: 16;
-        Input {
-            margin: 0 1;
-            padding: 0 1;
-        }
-        OptionList {
-            border: none;
-            height: 1fr;           
-            padding: 0;
-            margin: 0 1;                     
-            overflow: hidden;
-            text-wrap: nowrap;
-            text-overflow: ellipsis;  
-            & > .option-list--option {
-                padding: 0 1;    
-         
-            }
-        }
-        DirectoryTree {
-            margin: 0 1;
-            padding: 0 0 0 1;
-            &:focus {
-                background-tint:transparent;
-            }
-        }
-        .message {
-            background: $foreground 8%;
-            color: $text 40%;
-            margin: 0 1;    
-            padding: 0 1;        
-        }
-    }
-
-    &.-show-path-search {
-        PathSearch {
-            display: block
-        }
-    }
-
-    &.-show-slash-complete {
-        SlashComplete {
-            display: block;
-        }
     }
 
     Question {
@@ -603,71 +510,9 @@ ModeSwitcher {
     }
 }
 
-MainScreen {    
+MainScreen {
     background: $background;
-    layers: sidebar screen base;    
-
-    SideBar {        
-        border-right: tall black 10%;
-        background: transparent;        
-        dock: left;
-
-        overflow: hidden scroll;
-        scrollbar-size: 0 0;
-        box-sizing: border-box;        
-        
-        padding: 0 0;
-        margin: 0;
-        width: 40;
-        max-width: 45%;
-        min-width: 40;
-        height: 1fr;             
-                         
-        DirectoryTree {  
-            height: 1fr;                                  
-            background: transparent;
-            &:focus {
-                background-tint: transparent;
-            }                                        
-        }
-
-
-        Plan {
-            border: none;
-            margin: 0 !important;
-            padding: 0 1 0 0;    
-            .plan {
-                color: $text-secondary;    
-            }
-        }
-
-
-        Collapsible {   
-        
-            width: 1fr;                  
-            height: 1fr;              
-            min-height: 3;
-
-            &.-collapsed {
-                height: auto;
-            }
-
-            &.-fixed {                
-                height: auto;
-                Contents {
-                    height: auto;
-                }
-            }
-                               
-            Contents {                
-                height: 1fr;
-                padding: 1 0 0 0;                                           
-            }
-        }
-
-
-    }
-
+    layers: screen base;
 }
 
 

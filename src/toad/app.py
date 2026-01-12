@@ -30,7 +30,6 @@ from toad import atomic
 if TYPE_CHECKING:
     from toad.screens.main import MainScreen
     from toad.screens.settings import SettingsScreen
-    from toad.screens.store import StoreScreen
 
 
 DRACULA_TERMINAL_THEME = terminal_theme.TerminalTheme(
@@ -207,18 +206,10 @@ def get_settings_screen() -> SettingsScreen:
     return SettingsScreen()
 
 
-def get_store_screen() -> StoreScreen:
-    """Get the store screen (lazily loaded)."""
-    from toad.screens.store import StoreScreen
-
-    return StoreScreen()
-
-
 class ToadApp(App, inherit_bindings=False):
     """The top level app."""
 
     SCREENS = {"settings": get_settings_screen}
-    MODES = {"store": get_store_screen}
     BINDING_GROUP_TITLE = "System"
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding(
@@ -258,22 +249,18 @@ class ToadApp(App, inherit_bindings=False):
         self,
         agent_data: AgentData | None = None,
         project_dir: str | None = None,
-        mode: str | None = None,
     ) -> None:
         """Toad app.
 
         Args:
             agent_data: Agent data to run.
             project_dir: Project directory.
-            mode: Initial mode.
-            agent: Agent identity or shor name.
         """
         self.settings_changed_signal = Signal(self, "settings_changed")
         self.agent_data = agent_data
         self.project_dir = (
             None if project_dir is None else Path(project_dir).expanduser().resolve()
         )
-        self._initial_mode = mode
         self.version_meta: VersionMeta | None = None
         self._supports_pyperclip: bool | None = None
         self._terminal_title_flash_timer: Timer | None = None
@@ -513,8 +500,6 @@ class ToadApp(App, inherit_bindings=False):
             self.set_class(not bool(value), "-hide-info-bar")
         elif key == "agent.thoughts":
             self.set_class(not bool(value), "-hide-thoughts")
-        elif key == "sidebar.hide":
-            self.set_class(bool(value), "-hide-sidebar")
 
         self.settings_changed_signal.publish((key, value))
 
@@ -536,10 +521,7 @@ class ToadApp(App, inherit_bindings=False):
         self.capture_event("toad-run")
         self.anon_id
 
-        if mode := self._initial_mode:
-            self.switch_mode(mode)
-        else:
-            self.push_screen(self.get_main_screen())
+        self.push_screen(self.get_main_screen())
 
         self.update_terminal_title()
         self.set_timer(1, self.run_version_check)

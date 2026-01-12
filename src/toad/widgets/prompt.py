@@ -23,10 +23,7 @@ from toad.app import ToadApp
 from toad import messages
 from toad.widgets.highlighted_textarea import HighlightedTextArea
 from toad.widgets.condensed_path import CondensedPath
-from toad.widgets.path_search import PathSearch
-from toad.widgets.plan import Plan
 from toad.widgets.question import Ask, Question
-from toad.widgets.slash_complete import SlashComplete
 from toad.messages import UserInputSubmitted
 from toad.slash_command import SlashCommand
 from toad.prompt.extract import extract_paths_from_prompt
@@ -45,14 +42,6 @@ class ModeSwitcher(OptionList):
 
     def action_dismiss(self):
         self.blur()
-
-
-class InvokeFileSearch(Message):
-    pass
-
-
-class InvokeSlashComplete(Message):
-    pass
 
 
 class AgentInfo(Label):
@@ -371,17 +360,6 @@ See on-screen instructions for details.
                 direction = 0
             line = self.document.get_line(y)
 
-            if (
-                not self.shell_mode
-                and y == 0
-                and x == 1
-                and direction == +1
-                and line
-                and line[0] == "/"
-            ):
-                self.post_message(InvokeSlashComplete())
-                return
-
             if y == 0 and line and line[0] == "/" and direction == -1:
                 if line in self.slash_command_prefixes:
                     self.selection = Selection((0, 0), (0, len(line)))
@@ -394,11 +372,6 @@ See on-screen instructions for details.
                 if direction == -1 and x == end:
                     self.selection = Selection((y, start), (y, end))
                     break
-
-            if x > 0 and x <= len(line) and line[x - 1] == "@":
-                remaining_line = line[x + 1 :]
-                if not remaining_line or remaining_line[0].isspace():
-                    self.post_message(InvokeFileSearch())
 
 
 class Prompt(containers.VerticalGroup):
@@ -416,21 +389,16 @@ class Prompt(containers.VerticalGroup):
     prompt_text_area = getters.query_one(PromptTextArea)
     prompt_label = getters.query_one("#prompt", Label)
     current_directory = getters.query_one(CondensedPath)
-    path_search = getters.query_one(PathSearch)
-    slash_complete = getters.query_one(SlashComplete)
     question = getters.query_one(Question)
     mode_switcher = getters.query_one(ModeSwitcher)
 
     slash_commands: var[list[SlashCommand]] = var(list)
     shell_mode = var(False)
     multi_line = var(False)
-    show_path_search = var(False, toggle_class="-show-path-search", bindings=True)
-    show_slash_complete = var(False, toggle_class="-show-slash-complete", bindings=True)
     project_path = var(Path())
     working_directory = var("")
     agent_info = var(Content(""))
     _ask: var[Ask | None] = var(None)
-    plan: var[list[Plan.Entry]]
     agent_ready: var[bool] = var(False)
     current_mode: var[Mode | None] = var(None)
     modes: var[dict[str, Mode] | None] = var(None)
@@ -473,10 +441,6 @@ class Prompt(containers.VerticalGroup):
             )
             self.query_one(ModeInfo).with_tooltip(tooltip).update(mode.name)
         self.watch_modes(self.modes)
-
-    async def watch_project_path(self) -> None:
-        """Initial refresh of paths."""
-        self.call_later(self.path_search.refresh_paths)
 
     def ask(self, ask: Ask) -> None:
         """Replace the textarea prompt with a menu of options.
@@ -581,11 +545,7 @@ class Prompt(containers.VerticalGroup):
             self.prompt_text_area.placeholder = Content.assemble(
                 "What would you like to do?\t".expandtabs(8),
                 ("▌!▐", "r"),
-                " shell ",
-                ("▌/▐", "r"),
-                " commands ",
-                ("▌@▐", "r"),
-                " files",
+                " shell",
             )
             self.prompt_text_area.highlight_language = "markdown"
 
@@ -621,16 +581,6 @@ class Prompt(containers.VerticalGroup):
             text, maintain_selection_offset=False
         )
 
-    def watch_show_path_search(self, show: bool) -> None:
-        self.prompt_text_area.suggestion = ""
-
-    def watch_show_slash_complete(self, show: bool) -> None:
-        self.slash_complete.focus()
-
-    def project_directory_updated(self) -> None:
-        """Called when there is may be new files"""
-        self.path_search.refresh_paths()
-
     @on(PromptTextArea.RequestShellMode)
     def on_request_shell_mode(self, event: PromptTextArea.RequestShellMode):
         self.shell_mode = True
@@ -651,52 +601,10 @@ class Prompt(containers.VerticalGroup):
     def on_cancel_shell(self, event: PromptTextArea.CancelShell):
         self.shell_mode = False
 
-    @on(InvokeFileSearch)
-    def on_invoke_file_search(self, event: InvokeFileSearch) -> None:
-        event.stop()
-        if not self.shell_mode:
-            self.show_path_search = True
-            self.path_search.reset()
-
-    @on(InvokeSlashComplete)
-    def on_invoke_slash_complete(self, event: InvokeSlashComplete) -> None:
-        event.stop()
-        self.show_slash_complete = True
-
     @on(messages.PromptSuggestion)
     def on_prompt_suggestion(self, event: messages.PromptSuggestion) -> None:
         event.stop()
         self.prompt_text_area.suggestion = event.suggestion
-
-    @on(SlashComplete.Completed)
-    def on_slash_complete_completed(self, event: SlashComplete.Completed) -> None:
-        self.prompt_text_area.clear()
-        self.prompt_text_area.insert(f"{event.command} ")
-
-    @on(messages.Dismiss)
-    def on_dismiss(self, event: messages.Dismiss) -> None:
-        event.stop()
-        if event.widget is self.slash_complete:
-            self.show_slash_complete = False
-            self.prompt_text_area.suggestion = ""
-            self.focus()
-        elif event.widget is self.path_search:
-            self.show_path_search = False
-            self.focus()
-
-    @on(messages.InsertPath)
-    def on_insert_path(self, event: messages.InsertPath) -> None:
-        event.stop()
-        if " " in event.path:
-            path = f'"{event.path}"'
-        else:
-            path = event.path
-            if (
-                self.prompt_text_area.get_text_range(*self.prompt_text_area.selection)
-                != " "
-            ):
-                path += " "
-        self.prompt_text_area.insert(path)
 
     @on(Question.Answer)
     def on_question_answer(self, event: Question.Answer) -> None:
@@ -721,8 +629,6 @@ class Prompt(containers.VerticalGroup):
             self.prompt_text_area.suggestion = suggestion[len(self.text) :]
 
     def compose(self) -> ComposeResult:
-        yield PathSearch(self.project_path).data_bind(root=Prompt.project_path)
-        yield SlashComplete().data_bind(slash_commands=Prompt.slash_commands)
         with PromptContainer(id="prompt-container"):
             yield Question()
             with containers.HorizontalGroup(id="text-prompt"):
@@ -751,7 +657,5 @@ class Prompt(containers.VerticalGroup):
             return
         if self.shell_mode:
             self.shell_mode = False
-        elif self.show_slash_complete:
-            self.show_slash_complete = False
         else:
             raise SkipAction()

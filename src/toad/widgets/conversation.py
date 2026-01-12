@@ -69,15 +69,9 @@ AGENT_FAIL_HELP = """\
 **The agent failed to start.**
 
 Check that the agent is installed and up-to-date.
-
 Note that some agents require an ACP adapter to be installed to work with Toad.
 
-- Exit the app, and run `toad` agin
-- Select the agent and hit ENTER
-- Click the dropdown, select "Install"
-- Click the GO button
-- Repeat the process to install an ACP adapter (if required)
-
+To install an agent, run its installation command directly in your terminal.
 Some agents may require you to restart your shell (open a new terminal) after installing.
 
 If that fails, ask for help in [Discussions](https://github.com/batrachianai/toad/discussions)!
@@ -887,26 +881,6 @@ class Conversation(containers.Vertical):
         )
         self._agent_response = None
         self._agent_thought = None
-
-    @on(acp_messages.Plan)
-    async def on_acp_plan(self, message: acp_messages.Plan):
-        from toad.widgets.plan import Plan
-
-        entries = [
-            Plan.Entry(
-                Content(entry["content"]),
-                entry.get("priority", "medium"),
-                entry.get("status", "pending"),
-            )
-            for entry in message.entries
-        ]
-
-        if self.contents.children and isinstance(
-            (current_plan := self.contents.children[-1]), Plan
-        ):
-            current_plan.entries = entries
-        else:
-            await self.post(Plan(entries))
 
     @on(acp_messages.ToolCallUpdate)
     @on(acp_messages.ToolCall)

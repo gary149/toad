@@ -76,7 +76,7 @@ def main():
 # @click.pass_context
 @main.command("run")
 @click.argument("project_dir", metavar="PATH", required=False, default=".")
-@click.option("-a", "--agent", metavar="AGENT", default="")
+@click.option("-a", "--agent", metavar="AGENT", default="claude")
 @click.option(
     "-p",
     "--port",
@@ -94,20 +94,23 @@ def main():
     help="Host to use in conjunction with --serve",
 )
 @click.option("-s", "--serve", is_flag=True, help="Serve Toad as a web application")
-def run(port: int, host: str, serve: bool, project_dir: str = ".", agent: str = "1"):
+def run(port: int, host: str, serve: bool, project_dir: str = ".", agent: str = "claude"):
     """Run an installed agent (same as `toad PATH`)."""
+    from rich import print
 
     check_directory(project_dir)
 
-    if agent:
-        import asyncio
+    import asyncio
 
-        agent_data = asyncio.run(get_agent_data(agent))
-    else:
-        agent_data = None
+    agent_data = asyncio.run(get_agent_data(agent))
+
+    if agent_data is None:
+        print(f"[red]Error:[/] Agent '{agent}' not found.")
+        print("Use 'toad -a <agent>' to specify an agent.")
+        print("Available agents: claude, openai, openhands, goose, gemini, etc.")
+        sys.exit(1)
 
     app = ToadApp(
-        mode=None if agent_data else "store",
         agent_data=agent_data,
         project_dir=project_dir,
     )
